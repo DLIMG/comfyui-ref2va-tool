@@ -1,0 +1,38 @@
+# ===== Python 运行时 / 缓存 =====
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.pytest_cache/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# ===== 编辑器 / OS =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 大型中间产物 / 数据（data/ 的流水线产物，不入库）=====
+data/uploads/
+data/runs/
+data/results/
+data/remote_staging/
+data/diagnostics/
+data/audit_contact_sheets/
+
+# 备份文件
+data/storyboard.backup-*.json
+data/storyboard.before_*.json
+data/storyboard-*.stderr.log
+data/storyboard-*.stdout.log
+data/*.backup-*.json
+
+# 说明：以下 data/ 根目录文件默认入库（核心剧本，需版本控制）
+#   data/storyboard.json
+#   data/cyberpunk_ai_memory_*.json
+#   data/reference_migrations.json

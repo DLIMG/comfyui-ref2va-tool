@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ref2VA 表格故事板</title><link rel="stylesheet" href="/app.css"></head>
+<body><main>
+  <header><div><h1>Ref2VA 表格故事板</h1><p>素材保留在本机，可选择本地或远端 ComfyUI 生成。</p></div><div id="health" class="pill">正在连接…</div></header>
+  <section id="storyboard-toolbar" class="toolbar">
+    <input id="project-name" value="未命名项目" aria-label="项目名称">
+    <button id="new-storyboard">新建故事板</button><button id="add-shot">＋ 新增片段</button><button id="toggle-select-all">全选</button><button id="duplicate-shot">复制片段</button><button id="delete-selected">删除选中</button>
+    <span class="spacer"></span><button id="import-json">导入JSON</button><button id="export-json">导出JSON</button><button id="save-storyboard">保存</button>
+    <button id="submit-selected" class="primary">生成选中</button><button id="submit-all">全部排队</button><input id="json-file" type="file" accept="application/json,.json" hidden>
+  </section>
+  <details id="advanced-settings" class="advanced-settings">
+    <summary>高级参数（全局）</summary>
+    <div class="advanced-settings-body">
+      <label><input id="turbo-lora-enabled" type="checkbox" checked> 启用 Turbo LoRA <small>关闭后自动使用15步基础采样</small></label>
+      <label><input id="sage-attention-enabled" type="checkbox" checked> 启用 SageAttention <small>可独立关闭以排查高分辨率稳定性</small></label>
+      <label>采样步数 <input id="sampling-steps" type="number" min="1" max="100" step="1" value="8"> <small>默认 8 步</small></label>
+      <label>分辨率 <select id="global-resolution"><option value="0.2mp">0.2 MP</option><option value="0.3mp">0.3 MP</option><option value="0.4mp" selected>0.4 MP（默认）</option><option value="0.5mp">0.5 MP</option><option value="0.6mp">0.6 MP</option><option value="0.7mp">0.7 MP</option><option value="0.8mp">0.8 MP</option><option value="0.9mp">0.9 MP</option><option value="1.0mp">1.0 MP</option></select> <small>应用到全部分镜</small></label>
+      <label><input id="auto-upscale-enabled" type="checkbox"> 自动高清放大新结果到 <select id="upscale-resolution"><option value="720p" selected>720P</option><option value="1080p">1080P</option></select> <button id="upscale-all-results" type="button">一键放大全部</button> <small>按当前清晰度处理所有尚未放大的原始结果</small></label>
+      <label>生成设备 <select id="generation-target"><option value="local">本机 ComfyUI</option><option value="remote">远端 ComfyUI</option></select> <small>连续续镜必须使用同一台设备</small></label>
+      <label id="remote-comfy-row">远端地址 <input id="comfy-url" type="url" value="http://192.168.11.103:8188" placeholder="http://192.168.11.103:8188"> <button id="test-comfy-connection" type="button">测试连接</button> <small>参考图会自动上传，结果自动下载回本机项目</small></label>
+      <span>设置会应用到所有分镜，并随故事板JSON保存。</span>
+    </div>
+  </details>
+  <section id="continuous-preview" class="continuous-preview">
+    <div class="preview-heading"><div><h2>连续预览</h2><p id="preview-status">尚无可播放片段</p></div><span id="preview-count" class="pill">0 段可用</span></div>
+    <div class="preview-stage"><video id="continuous-video" aria-label="连续预览视频" controls preload="metadata"></video><div id="preview-empty" class="preview-empty">生成结果会按故事板顺序出现在这里。</div></div>
+    <div id="preview-notice" class="preview-notice" role="status" aria-live="polite"></div>
+    <div class="preview-controls"><button id="preview-restart">从头播放</button><button id="preview-prev">上一段</button><button id="preview-next">下一段</button></div>
+  </section>
+  <section class="table-wrap"><table><thead><tr><th>选</th><th>片段号</th><th>标题</th><th>参考图</th><th>提示词摘要</th><th>画面</th><th>时长</th><th>种子</th><th>状态</th><th>结果</th><th>操作</th></tr></thead><tbody id="storyboard-body"></tbody></table></section>
+  <div id="global-status" class="global-status" role="status" aria-live="polite">准备就绪</div>
+</main>
+<aside id="queue-sidebar" class="queue-sidebar" aria-label="生成队列">
+  <div class="queue-sidebar-head"><div><h2>生成队列</h2><p>正在生成和等待中的分镜</p></div><div class="queue-sidebar-controls"><span id="queue-count" class="pill">0 个</span><button id="queue-toggle" type="button" aria-expanded="true" aria-controls="queue-list">收起</button></div></div>
+  <div id="queue-list" class="queue-list"></div>
+  <div id="queue-empty" class="queue-empty">当前没有排队任务</div>
+</aside>
+<dialog id="image-preview-dialog" class="image-preview-dialog" aria-label="参考图大图预览"><button id="image-preview-close" class="image-preview-close" type="button" aria-label="关闭大图预览">×</button><img id="image-preview-full" alt="参考图大图预览"></dialog>
+<template id="editor-template"><div class="editor">
+  <div class="editor-head"><label>片段号<input class="edit-id"></label><label>标题<input class="edit-title"></label><label>输出名<input class="edit-output"></label><label>生成模式<select class="edit-generation-mode"><option value="r2va">R2VA 多参考</option><option value="fl2va">FL2VA 首尾帧</option></select></label><label class="continuation-option"><input class="edit-continuation" type="checkbox">延续上一镜（AV Latent）</label><label class="continuation-option"><input class="edit-save-latent" type="checkbox">保存 Latent 上下文</label></div>
+<div class="editor-grid"><section><div class="section-title"><div><h3>参考图 / 关键帧</h3><p class="reference-guidance"></p></div><button type="button" class="pick-images">选择图片</button></div><div class="image-drop-zone" tabindex="0" role="button" aria-label="选择或拖入参考图">把图片拖到这里，或点击“选择图片”<input class="image-input" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden></div><div id="reference-list" class="reference-list"></div></section><section><div class="section-title"><h3>视频提示词（自由格式 / H3 六段式）</h3><button class="pick-text">读取 TXT</button></div><textarea id="prompt" class="edit-prompt" rows="17"></textarea></section></div>
+  <section class="results-section"><div class="section-title"><h3>生成结果</h3><span class="result-summary"></span></div><div class="result-list"></div></section>
+  <div class="editor-foot"><label>清晰度<select class="edit-resolution"><optgroup label="按百万像素测试"><option value="0.2mp">0.2 MP（快速测试）</option><option value="0.3mp">0.3 MP</option><option value="0.4mp">0.4 MP</option><option value="0.5mp">0.5 MP</option><option value="0.6mp">0.6 MP</option><option value="0.7mp">0.7 MP</option><option value="0.8mp">0.8 MP</option><option value="0.9mp">0.9 MP</option><option value="1.0mp">1.0 MP</option></optgroup><optgroup label="原有预设"><option value="480p">480P（0.4 MP）</option><option value="720p">720P（0.9 MP）</option><option value="1080p">1080P（2.1 MP）</option></optgroup></select></label><label>画幅<select class="edit-aspect"><option value="16:9">16:9 横屏</option><option value="9:16">9:16 竖屏</option><option value="4:3">4:3 横屏</option><option value="3:4">3:4 竖屏</option><option value="1:1">1:1 方形</option></select></label><label>时长<input class="edit-duration" type="number" min="1" step="1"></label><label>种子<input class="edit-seed" type="number" step="1"></label><button class="validate-shot">验证</button><button id="submit" class="submit-shot primary">提交本片段</button><button class="cancel-shot danger" hidden>取消生成</button><button class="open-run">打开运行目录</button><button class="open-output">打开输出目录</button><span class="editor-message"></span></div>
+</div></template>
+<script src="/playlist.js"></script><script src="/media-player.js"></script><script src="/project-merge.js"></script><script src="/app.js"></script></body></html>
