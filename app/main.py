@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .comfy_client import ComfyClient, ComfyError
 from .picker import pick_files
@@ -24,7 +24,10 @@ from .results import (
     preserve_downloaded_results,
     resolve_managed_results_root,
 )
-from .storage import load_project, migrate_project_references, save_project, save_uploaded_image, stage_image
+from .storage import (
+    load_project, migrate_project_references, save_project, save_uploaded_image,
+    save_uploaded_video, stage_image,
+)
 from .upscale import build_video_upscale_workflow, stage_video
 from .validation import validate_shot
 from .workflow import build_shot_workflow, load_template
@@ -94,6 +97,7 @@ class PathBody(BaseModel):
 
 class SubmitBody(BaseModel):
     references: list[str]
+    reference_videos: list[str] = Field(default_factory=list)
     prompt: str
     duration: float = 6
     seed: int = 1
@@ -188,6 +192,16 @@ def create_app(
         subfolder = str(response.get("subfolder") or "codex_ref2va_tool").strip("/\\")
         return f"{subfolder}/{name}" if subfolder else name
 
+    def stage_video_for_target(source: str | Path, target_url: str, target_client: Any) -> str:
+        if target_url == LOCAL_COMFY_URL or fixed_client is not None:
+            staged = stage_video(source, input_dir)
+            return f"codex_ref2va_tool/{staged.name}"
+        staged = stage_video(source, data / "remote_staging")
+        response = target_client.upload_input(staged.name, staged.read_bytes())
+        name = Path(str(response.get("name") or staged.name)).name
+        subfolder = str(response.get("subfolder") or "codex_ref2va_tool").strip("/\\")
+        return f"{subfolder}/{name}" if subfolder else name
+
     @app.get("/")
     def home():
         return FileResponse(STATIC / "index.html")
@@ -218,6 +232,13 @@ def create_app(
         if not image.is_file() or image.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
             raise HTTPException(404, "图片不存在")
         return FileResponse(image)
+
+    @app.get("/api/video-preview")
+    def video_preview(path: str):
+        video = Path(path)
+        if not video.is_file() or video.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}:
+            raise HTTPException(404, "视频不存在")
+        return FileResponse(video)
 
     @app.get("/api/health")
     def health():
@@ -299,6 +320,10 @@ def create_app(
     def pick_images():
         return {"paths": pick_files("images")}
 
+    @app.post("/api/pick-videos")
+    def pick_videos():
+        return {"paths": pick_files("videos")}
+
     @app.post("/api/upload-images")
     async def upload_images(files: list[UploadFile] = File(...)):
         paths: list[str] = []
@@ -306,6 +331,17 @@ def create_app(
             for upload in files:
                 content = await upload.read()
                 paths.append(str(save_uploaded_image(upload.filename or "image", content, data / "uploads")))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"paths": paths}
+
+    @app.post("/api/upload-videos")
+    async def upload_videos(files: list[UploadFile] = File(...)):
+        paths: list[str] = []
+        try:
+            for upload in files:
+                content = await upload.read()
+                paths.append(str(save_uploaded_video(upload.filename or "video", content, data / "uploads")))
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         return {"paths": paths}
@@ -330,6 +366,9 @@ def create_app(
                 if normalize_comfy_url(body.previous_comfy_url) != target_url:
                     raise ValueError("续镜必须与上一镜使用同一台生成设备")
             relative_names = [stage_for_target(path, target_url, target_client) for path in body.references]
+            relative_video_names = [
+                stage_video_for_target(path, target_url, target_client) for path in body.reference_videos
+            ]
             template = load_template(template_file)
             output_prefix = f"codex_ref2va_tool/{body.output_name}"
             workflow = build_shot_workflow(
@@ -351,6 +390,7 @@ def create_app(
                 sampling_steps=body.sampling_steps,
                 audio_tail_carryover=body.audio_tail_carryover,
                 audio_feather_ticks=body.audio_feather_ticks,
+                reference_video_names=relative_video_names,
             )
             stamp = time.strftime("%Y%m%d-%H%M%S")
             run_dir = data / "runs" / body.output_name / f"{stamp}-{uuid.uuid4().hex[:6]}"

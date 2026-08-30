@@ -106,6 +106,23 @@ def test_build_workflow_supports_arbitrary_reference_count(count):
     assert result["123"] == original_sampler
 
 
+def test_r2va_attaches_reference_video_frames_and_matching_audio():
+    result = build_shot_workflow(
+        load_template(TEMPLATE), ["cat.png"], "<Picture 1>替换<Video 1>中的人物", 15, 123,
+        "project/cat_video", reference_video_names=["source.mp4"],
+    )
+
+    inputs = result["136"]["inputs"]
+    frame_node = inputs["ref_videos.ref_video_0"][0]
+    audio_node = inputs["ref_video_audios.ref_video_audio_0"][0]
+    assert frame_node == audio_node
+    assert result[frame_node]["class_type"] == "GetVideoComponents"
+    load_node = result[frame_node]["inputs"]["video"][0]
+    assert result[load_node] == {"class_type": "LoadVideo", "inputs": {"file": "source.mp4"}}
+    assert inputs["ref_videos.ref_video_0"][1] == 0
+    assert inputs["ref_video_audios.ref_video_audio_0"][1] == 1
+
+
 def test_build_does_not_mutate_template():
     template = load_template(TEMPLATE)
     before = json.dumps(template, ensure_ascii=False, sort_keys=True)
@@ -309,3 +326,15 @@ def test_build_continuation_accepts_conservative_audio_handover(generation_mode)
     continuation_inputs = result["201"]["inputs"]
     assert continuation_inputs["audio_tail_carryover"] == "Match Video Handover"
     assert continuation_inputs["audio_feather_ticks"] == 8
+
+
+@pytest.mark.parametrize("generation_mode", ["r2va", "fl2va"])
+def test_build_continuation_accepts_no_audio_carryover(generation_mode):
+    refs = ["identity.png"] if generation_mode == "r2va" else ["last.png"]
+    result = build_shot_workflow(
+        load_template(TEMPLATE), refs, "prompt", 6, 7, "shot_02",
+        generation_mode=generation_mode, continue_from_previous=True,
+        previous_output_name="shot_01",
+        audio_tail_carryover="No Audio Carryover",
+    )
+    assert result["201"]["inputs"]["audio_tail_carryover"] == "No Audio Carryover"

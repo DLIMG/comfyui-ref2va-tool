@@ -10,6 +10,11 @@ def build_picker_script(kind: str) -> str:
         filter_text = "图片|*.png;*.jpg;*.jpeg;*.webp|所有文件|*.*"
         title = "选择参考图"
         result = "$dialog.FileNames"
+    elif kind == "videos":
+        multiple = "$true"
+        filter_text = "视频|*.mp4;*.mov;*.mkv;*.webm|所有文件|*.*"
+        title = "选择参考视频（每段2-15秒，最多3段）"
+        result = "$dialog.FileNames"
     elif kind == "text":
         multiple = "$false"
         filter_text = "文本|*.txt|所有文件|*.*"

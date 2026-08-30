@@ -12,6 +12,7 @@ from typing import Any
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
 
 
 def default_project() -> dict[str, Any]:
@@ -80,6 +81,20 @@ def save_uploaded_image(filename: str, content: bytes, upload_dir: str | Path) -
     if suffix not in IMAGE_EXTENSIONS:
         raise ValueError(f"不支持的图片格式: {suffix or '无扩展名'}")
     safe_stem = re.sub(r"[^\w\u4e00-\u9fff-]+", "_", Path(filename).stem, flags=re.UNICODE).strip("_") or "image"
+    digest = hashlib.sha256(content).hexdigest()[:12]
+    target = Path(upload_dir)
+    target.mkdir(parents=True, exist_ok=True)
+    destination = target / f"{safe_stem}_{digest}{suffix}"
+    if not destination.exists():
+        destination.write_bytes(content)
+    return destination.resolve()
+
+
+def save_uploaded_video(filename: str, content: bytes, upload_dir: str | Path) -> Path:
+    suffix = Path(filename).suffix.lower()
+    if suffix not in VIDEO_EXTENSIONS:
+        raise ValueError(f"不支持的视频格式: {suffix or '无扩展名'}")
+    safe_stem = re.sub(r"[^\w\u4e00-\u9fff-]+", "_", Path(filename).stem, flags=re.UNICODE).strip("_") or "video"
     digest = hashlib.sha256(content).hexdigest()[:12]
     target = Path(upload_dir)
     target.mkdir(parents=True, exist_ok=True)

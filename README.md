@@ -1,46 +1,101 @@
 # ComfyUI H3 分镜与 Latent 续镜工具
 
-## 使用方法
+面向 MiniMax H3 R2VA / FL2VA 的本地故事板工作台。它把参考素材、中文提示词、ComfyUI 工作流、任务队列、AV Latent 续镜和生成结果放进同一个网页界面，适合短剧、多镜头连续叙事和动作 / 音频参考迁移。
 
-1. 启动本机或远端 ComfyUI。远端模式默认连接 `http://192.168.11.103:8188`。
-2. 双击 `启动工具.bat`。
-3. 浏览器会自动打开 `http://127.0.0.1:8765`。
-4. 展开“高级参数”，在“生成设备”中选择本机或远端；远端可填写 IP 并点击“测试连接”。
-5. 故事板一行代表一个最终视频片段。点击“新增片段”或“复制片段”。
-6. 点击表格中的片段行，展开编辑区。
-7. 为每个片段选择“R2VA 多参考”或“FL2VA 首尾帧”。R2VA 图片按顺序成为 `<Picture N>`；FL2VA 首段的前两张依次为首帧、尾帧，其余为 Qwen 参考图。
-8. 连续动作镜头可勾选“延续上一镜（AV Latent）”。软件按故事板顺序加载上一镜保存的 latent，保护39帧上下文并在输出时移除重叠头部。第一行不能开启延续。
-9. 点击“读取 TXT”或直接粘贴完整 H3 提示词。
-10. 选择清晰度和画幅，再填写片段号、标题、时长、随机种子和输出名称。
-11. 单独提交当前片段，或勾选多行后点击“生成选中”；latent续镜建议使用“全部排队”，保证上一镜先保存latent。
-12. 生成完成后，展开对应片段，在“生成结果”区域直接播放视频；每次生成都会新增视频结果。
+## 成果展示
 
-故事板自动保存在 `data\storyboard.json`。页面刷新或工具重启后会恢复所有片段。可使用“导入JSON”和“导出JSON”备份或转移项目。
+> 点击封面播放轻量预览；仓库中的演示版经过压缩，原始成片未纳入版本控制。
 
-本机模式直接使用 `http://127.0.0.1:8188`。远端模式下，故事板 JSON、原始参考图和提示词仍保存在本机；提交时软件自动把当前分镜所需素材上传到远端 ComfyUI，完成后再把视频下载回本机项目结果目录。任务状态、取消和高清放大也会自动指向任务原来的设备。
+| 短剧测试：《外星人来地球当群演》 | 小猫唱歌一镜到底 |
+| --- | --- |
+| [![《外星人来地球当群演》视频封面](docs/showcase/alien-extra.jpg)](docs/showcase/alien-extra.mp4) | [![小猫唱歌一镜到底视频封面](docs/showcase/cat-one-take.jpg)](docs/showcase/cat-one-take.mp4) |
+| 83 秒竖屏短剧测试，验证多镜头叙事与角色 / 场景连续性。 | 30 秒竖屏连续镜头，验证参考视频动作、原声与 AV Latent 接续。 |
 
-## 文件位置
+## 主要能力
 
-- ComfyUI 输入副本：`G:\ComfyUI\input\codex_ref2va_tool\`
-- ComfyUI 视频输出：`G:\ComfyUI\output\codex_ref2va_tool\`
-- H3 AV latent：`G:\ComfyUI\output\codex_ref2va_tool\latents\`
-- 每次实际提交的工作流：本工具目录下 `data\runs\`
-- 工具管理的全部生成结果：本工具目录下 `data\results\`
-- 故事板数据：本工具目录下 `data\storyboard.json`
-- 网页选择或拖入的原始图片：本工具目录下 `data\uploads\`
-- 远端传输暂存（可重复使用）：本工具目录下 `data\remote_staging\`
-- API 工作流模板：`app\templates\minimax_h3_turbo_8step_ref2va_api.json`
+- **R2VA 多参考生成**：按顺序管理参考图、参考视频及其原声，并自动映射为 `<Picture N>`、`<Video N>` 和 `<Audio N>`。
+- **FL2VA 首尾帧生成**：首段支持首帧、尾帧与额外 Qwen 参考图。
+- **AV Latent 连续续镜**：保护 39 帧上下文，自动去除成片中的重叠头部，并约束相邻镜头使用同一生成设备。
+- **本机 / 远端 ComfyUI**：可切换生成设备、测试连接、上传所需素材并回收远端结果。
+- **故事板与批量队列**：逐镜编辑、复制、导入导出 JSON、生成选中或按顺序全部排队。
+- **结果管理**：页面内预览历史结果；每次生成新增结果，不覆盖旧视频。
+- **任务控制**：展示任务状态与剩余时间，可精确取消单个排队或运行中的任务。
 
-当前模板派生自 `MiniMax_H3_Turbo_8Step_LoRA_SageAttention_TeaCache_R2VA_480P.json`：启用 Turbo 8-step LoRA 与 SageAttention，关闭 4-step LoRA 与 TeaCache，调度器使用 8 steps。参考图、提示词、时长、随机种子、清晰度、画幅和输出名称仍由每次提交动态写入。
+## 快速开始
 
-Latent续镜依赖 `G:\ComfyUI\custom_nodes\Herrgotts-H3-Infinite-Continuation-Suite` v1.4。安装或更新节点包后必须重启ComfyUI。R2VA续镜保留R2VA参考条件并使用Masked AV目标latent；FL2VA续镜使用FL2VA条件与同一套Masked AV上下文。
+### 1. 准备环境
 
-## 注意
+- Python 3.10+
+- 已安装并可访问的 ComfyUI
+- MiniMax H3 所需模型与自定义节点
+- Latent 续镜需要 `Herrgotts-H3-Infinite-Continuation-Suite` v1.4
 
-- 页面中的图片顺序必须与提示词的 `<Picture N>` 一致。
-- 勾选延续后，上一行的`output_name`决定要加载的latent文件；不要在生成上一镜后随意改名。
-- Latent 续镜必须始终使用同一台 ComfyUI；软件会拒绝跨设备续镜。
-- 删除生成结果会永久删除 `data\results` 中的视频副本和故事板记录，无法恢复；ComfyUI 输出目录中的原始视频不会被本工具删除。
+安装 Python 依赖：
+
+```powershell
+pip install -r requirements.txt
+```
+
+### 2. 启动
+
+先启动 ComfyUI，再双击 `启动工具.bat`；也可以在命令行运行：
+
+```powershell
+python start.py
+```
+
+浏览器将打开 `http://127.0.0.1:8765`。网页服务仅监听本机 `127.0.0.1`，不会直接对局域网开放。
+
+### 3. 创建并生成故事板
+
+1. 展开“高级参数”，选择本机或远端生成设备；远端可填写 IP 并测试连接。
+2. 新增片段并选择 `R2VA 多参考` 或 `FL2VA 首尾帧`。
+3. 按提示词引用顺序添加图片和参考视频，再粘贴完整 H3 提示词。
+4. 设置片段号、标题、时长、随机种子、清晰度、画幅和输出名称。
+5. 连续动作镜头可勾选“延续上一镜（AV Latent）”；第一行不能开启延续。
+6. 保存后生成当前 / 选中片段，或用“全部排队”保证 Latent 续镜按顺序执行。
+7. 在片段的“生成结果”区域直接查看每次生成的视频。
+
+故事板自动保存在 `data/storyboard.json`，刷新页面或重启工具后会恢复；也可使用“导入 JSON”和“导出 JSON”备份或迁移项目。
+
+## R2VA / FL2VA 素材规则
+
+| 模式 | 素材顺序 | 说明 |
+| --- | --- | --- |
+| R2VA | 图片 → `<Picture N>` | 图片顺序必须与提示词一致。 |
+| R2VA | 视频 → `<Video N>`，原声 → `<Audio N>` | 单段 2–15 秒，最多 3 段。 |
+| FL2VA 首段 | 第 1 张为首帧，第 2 张为尾帧 | 后续图片作为 Qwen 参考图。 |
+| FL2VA 续镜 | 第 1 张为新的尾帧 | 当前版本不在 FL2VA 模式接入参考视频。 |
+
+## 数据与输出位置
+
+| 内容 | 默认位置 |
+| --- | --- |
+| 故事板 | `data/storyboard.json` |
+| 原始参考素材副本 | `data/uploads/` |
+| 实际提交的工作流 | `data/runs/` |
+| 工具管理的生成结果 | `data/results/` |
+| 远端传输暂存 | `data/remote_staging/` |
+| ComfyUI 输入副本 | `G:\ComfyUI\input\codex_ref2va_tool\` |
+| ComfyUI 视频与 Latent | `G:\ComfyUI\output\codex_ref2va_tool\` |
+| API 工作流模板 | `app/templates/minimax_h3_turbo_8step_ref2va_api.json` |
+
+如果故事板顶层设置了绝对路径 `project_dir`，生成结果还会复制到 `<project_dir>/06_生成视频`。
+
+## 工作流默认值
+
+当前模板启用 Turbo 8-step LoRA 与 SageAttention，关闭 4-step LoRA 和 TeaCache；采样步数为 8，scheduler 为 `simple`，sampler 为 `res_multistep`。参考素材、提示词、时长、随机种子、清晰度、画幅和输出名称会在每次提交时动态写入工作流。
+
+## 使用注意
+
+- 开启续镜后，上一行的 `output_name` 决定所加载的 Latent；生成上一镜后不要随意改名或调整顺序。
+- Latent 续镜必须始终使用同一台 ComfyUI，工具会拒绝跨设备接续。
+- 删除网页中的生成结果会永久删除 `data/results` 内的工具副本，但不会删除 ComfyUI 输出目录中的原始视频。
 - 输出名称不要包含斜杠、冒号等特殊字符。
-- 工具只在本机 `127.0.0.1` 上运行，不对局域网开放。
-- 如果显示“ComfyUI 未连接”，先检查对应设备是否运行、网线是否连接，以及远端 `8188` 端口是否可访问。
+- 若显示“ComfyUI 未连接”，请检查对应设备、网络连接和 `8188` 端口。
+
+## 测试
+
+```powershell
+python -m pytest -q
+```

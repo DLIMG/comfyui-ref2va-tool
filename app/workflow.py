@@ -147,6 +147,24 @@ def _load_image_node(image_name: str) -> dict[str, Any]:
     return {"class_type": "LoadImage", "inputs": {"image": image_name}}
 
 
+def _configure_r2va_videos(workflow: dict[str, Any], video_names: list[str]) -> None:
+    """Attach decoded 24 fps video frames and matching audio to Ref2VA conditioning."""
+    if not video_names:
+        return
+    next_id = max(int(node_id) for node_id in workflow if str(node_id).isdigit()) + 1
+    condition_inputs = workflow["136"]["inputs"]
+    for index, video_name in enumerate(video_names):
+        load_id = str(next_id + index * 2)
+        components_id = str(next_id + index * 2 + 1)
+        workflow[load_id] = {"class_type": "LoadVideo", "inputs": {"file": video_name}}
+        workflow[components_id] = {
+            "class_type": "GetVideoComponents",
+            "inputs": {"video": [load_id, 0]},
+        }
+        condition_inputs[f"ref_videos.ref_video_{index}"] = [components_id, 0]
+        condition_inputs[f"ref_video_audios.ref_video_audio_{index}"] = [components_id, 1]
+
+
 def _configure_acceleration(
     workflow: dict[str, Any],
     turbo_lora_enabled: bool,
@@ -336,13 +354,19 @@ def build_shot_workflow(
     sampling_steps: int | None = None,
     audio_tail_carryover: str = "Full Previous Tail",
     audio_feather_ticks: int = 0,
+    reference_video_names: list[str] | None = None,
 ) -> dict[str, Any]:
+    reference_video_names = reference_video_names or []
     if generation_mode not in {"r2va", "fl2va"}:
         raise ValueError(f"不支持的生成模式: {generation_mode}")
     if continue_from_previous and not previous_output_name.strip():
         raise ValueError("延续镜头必须指定上一镜输出名称")
     if generation_mode == "fl2va" and not continue_from_previous and len(reference_names) < 2:
         raise ValueError("FL2VA首段必须依次提供首帧和尾帧")
+    if generation_mode != "r2va" and reference_video_names:
+        raise ValueError("参考视频当前仅支持R2VA模式")
+    if len(reference_video_names) > 3:
+        raise ValueError("参考视频最多3段")
 
     result = build_workflow(
         template, reference_names, prompt, duration, seed, output_prefix,
@@ -350,6 +374,8 @@ def build_shot_workflow(
     )
     result["127"]["inputs"]["unet_name"] = R2VA_MODEL if generation_mode == "r2va" else FL2VA_MODEL
     _configure_acceleration(result, turbo_lora_enabled, sage_attention_enabled, sampling_steps)
+    if generation_mode == "r2va":
+        _configure_r2va_videos(result, reference_video_names)
     if generation_mode == "fl2va" and not continue_from_previous:
         _configure_fl2va_start(result, reference_names)
         result["125"]["inputs"]["latent_image"] = ["136", 1]

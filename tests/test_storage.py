@@ -8,6 +8,7 @@ from app.storage import (
     migrate_project_references,
     save_project,
     save_uploaded_image,
+    save_uploaded_video,
     stage_image,
 )
 
@@ -63,6 +64,13 @@ def test_save_uploaded_image_uses_safe_hashed_name(tmp_path):
 def test_save_uploaded_image_rejects_non_image_extension(tmp_path):
     with pytest.raises(ValueError, match="不支持的图片格式"):
         save_uploaded_image("prompt.txt", b"text", tmp_path / "uploads")
+
+
+def test_save_uploaded_video_uses_safe_hashed_name(tmp_path):
+    saved = save_uploaded_video("参考 视频?.MP4", b"video-content", tmp_path / "uploads")
+    assert saved.is_file()
+    assert saved.read_bytes() == b"video-content"
+    assert saved.suffix == ".mp4"
 
 
 def test_migrate_project_references_rewrites_known_paths_without_mutating_input():

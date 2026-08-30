@@ -23,8 +23,9 @@ def validate_shot(shot: dict[str, Any]) -> list[str]:
     if generation_mode not in GENERATION_MODES:
         errors.append(f"不支持的生成模式: {generation_mode}")
     references = shot.get("references") or []
-    if not references:
-        errors.append("至少添加一张参考图")
+    reference_videos = shot.get("reference_videos") or []
+    if not references and not reference_videos:
+        errors.append("至少添加一张参考图或一段参考视频")
     if generation_mode == "fl2va" and not continuation and len(references) < 2:
         errors.append("FL2VA首段必须依次提供首帧和尾帧")
     if continuation and not str(shot.get("previous_output_name") or "").strip():
@@ -32,6 +33,16 @@ def validate_shot(shot: dict[str, Any]) -> list[str]:
     for index, reference in enumerate(references, start=1):
         if not Path(str(reference)).is_file():
             errors.append(f"参考图不存在（Picture {index}）: {reference}")
+    if len(reference_videos) > 3:
+        errors.append("参考视频最多3段")
+    if generation_mode != "r2va" and reference_videos:
+        errors.append("参考视频当前仅支持R2VA模式")
+    for index, reference in enumerate(reference_videos, start=1):
+        path = Path(str(reference))
+        if not path.is_file():
+            errors.append(f"参考视频不存在（Video {index}）: {reference}")
+        elif path.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}:
+            errors.append(f"参考视频格式不支持（Video {index}）: {reference}")
 
     prompt = str(shot.get("prompt") or "")
     if not prompt.strip():

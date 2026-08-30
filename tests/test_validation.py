@@ -37,7 +37,27 @@ def test_invalid_shot_returns_chinese_errors(tmp_path):
 
 def test_requires_at_least_one_reference():
     errors = validate_shot({"references": [], "prompt": valid_prompt(), "duration": 6, "output_name": "ok"})
-    assert "至少添加一张参考图" in errors
+    assert "至少添加一张参考图或一段参考视频" in errors
+
+
+def test_r2va_accepts_video_as_the_only_reference(tmp_path):
+    video = tmp_path / "参考.mp4"
+    video.write_bytes(b"video")
+    errors = validate_shot({
+        "generation_mode": "r2va", "references": [], "reference_videos": [str(video)],
+        "prompt": "使用<Video 1>的动作", "duration": 15, "output_name": "video_ref",
+    })
+    assert errors == []
+
+
+def test_fl2va_rejects_reference_videos(tmp_path):
+    first, last, video = tmp_path / "first.png", tmp_path / "last.png", tmp_path / "ref.mp4"
+    first.write_bytes(b"x"); last.write_bytes(b"x"); video.write_bytes(b"x")
+    errors = validate_shot({
+        "generation_mode": "fl2va", "references": [str(first), str(last)],
+        "reference_videos": [str(video)], "prompt": "prompt", "duration": 6, "output_name": "bad",
+    })
+    assert "参考视频当前仅支持R2VA模式" in errors
 
 
 def test_rejects_unknown_generation_mode(tmp_path):
