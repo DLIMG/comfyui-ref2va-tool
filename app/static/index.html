@@ -1,8 +1,19 @@
 <!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ref2VA 表格故事板</title><link rel="stylesheet" href="/app.css"></head>
-<body><main>
-  <header><div><h1>Ref2VA 表格故事板</h1><p>素材保留在本机，可选择本地或远端 ComfyUI 生成。</p></div><div id="health" class="pill">正在连接…</div></header>
+<body>
+<aside id="preview-sidebar" class="preview-sidebar" aria-label="连续预览">
+  <section id="continuous-preview" class="continuous-preview">
+    <div class="preview-sidebar-head"><div><h2>连续预览</h2><p id="preview-status">尚无可播放片段</p></div><div class="preview-window-controls"><span id="preview-count" class="pill">0 段可用</span><button id="preview-size-toggle" type="button">放大</button><button id="preview-sidebar-toggle" type="button" aria-expanded="true">收起</button></div></div>
+    <div class="preview-sidebar-content">
+      <div class="preview-stage"><video id="continuous-video" aria-label="连续预览视频" controls preload="metadata"></video><div id="preview-empty" class="preview-empty">生成结果会按故事板顺序出现在这里。</div></div>
+      <div id="preview-notice" class="preview-notice" role="status" aria-live="polite"></div>
+      <div class="preview-controls"><button id="preview-restart">从头播放</button><button id="preview-prev">上一段</button><button id="preview-next">下一段</button></div>
+    </div>
+  </section>
+</aside>
+<main>
+  <header class="app-header"><div><h1>Ref2VA 表格故事板</h1><p>素材保留在本机，可选择本地或云端 ComfyUI 生成。</p></div><div class="device-panel"><label>生成设备 <select id="generation-target"><option value="local">本地 ComfyUI</option><option value="remote">云端 ComfyUI</option></select></label><label id="remote-comfy-row">云端 IP <input id="comfy-url" type="url" value="http://192.168.11.103:8188" placeholder="192.168.11.103:8188"><button id="test-comfy-connection" type="button">测试连接</button></label><div id="health" class="pill">正在连接…</div></div></header>
   <section id="storyboard-toolbar" class="toolbar">
     <input id="project-name" value="未命名项目" aria-label="项目名称">
     <button id="new-storyboard">新建故事板</button><button id="add-shot">＋ 新增片段</button><button id="toggle-select-all">全选</button><button id="duplicate-shot">复制片段</button><button id="delete-selected">删除选中</button>
@@ -17,18 +28,15 @@
       <label>采样步数 <input id="sampling-steps" type="number" min="1" max="100" step="1" value="8"> <small>默认 8 步</small></label>
       <label>分辨率 <select id="global-resolution"><option value="0.2mp">0.2 MP</option><option value="0.3mp">0.3 MP</option><option value="0.4mp" selected>0.4 MP（默认）</option><option value="0.5mp">0.5 MP</option><option value="0.6mp">0.6 MP</option><option value="0.7mp">0.7 MP</option><option value="0.8mp">0.8 MP</option><option value="0.9mp">0.9 MP</option><option value="1.0mp">1.0 MP</option></select> <small>应用到全部分镜</small></label>
       <label><input id="auto-upscale-enabled" type="checkbox"> 自动高清放大新结果到 <select id="upscale-resolution"><option value="720p" selected>720P</option><option value="1080p">1080P</option></select> <button id="upscale-all-results" type="button">一键放大全部</button> <small>按当前清晰度处理所有尚未放大的原始结果</small></label>
-      <label>生成设备 <select id="generation-target"><option value="local">本机 ComfyUI</option><option value="remote">远端 ComfyUI</option></select> <small>连续续镜必须使用同一台设备</small></label>
-      <label id="remote-comfy-row">远端地址 <input id="comfy-url" type="url" value="http://192.168.11.103:8188" placeholder="http://192.168.11.103:8188"> <button id="test-comfy-connection" type="button">测试连接</button> <small>参考图会自动上传，结果自动下载回本机项目</small></label>
-      <span>设置会应用到所有分镜，并随故事板JSON保存。</span>
+      <span>参数会应用到所有分镜；生成设备和云端 IP 也会随故事板 JSON 持久化保存。</span>
     </div>
   </details>
-  <section id="continuous-preview" class="continuous-preview">
-    <div class="preview-heading"><div><h2>连续预览</h2><p id="preview-status">尚无可播放片段</p></div><span id="preview-count" class="pill">0 段可用</span></div>
-    <div class="preview-stage"><video id="continuous-video" aria-label="连续预览视频" controls preload="metadata"></video><div id="preview-empty" class="preview-empty">生成结果会按故事板顺序出现在这里。</div></div>
-    <div id="preview-notice" class="preview-notice" role="status" aria-live="polite"></div>
-    <div class="preview-controls"><button id="preview-restart">从头播放</button><button id="preview-prev">上一段</button><button id="preview-next">下一段</button></div>
-  </section>
-  <section class="table-wrap"><table><thead><tr><th>选</th><th>片段号</th><th>标题</th><th>参考素材</th><th>提示词摘要</th><th>画面</th><th>时长</th><th>种子</th><th>状态</th><th>结果</th><th>操作</th></tr></thead><tbody id="storyboard-body"></tbody></table></section>
+  <details id="comfy-log-panel" class="comfy-log-panel">
+    <summary><span>ComfyUI 日志</span><span id="comfy-log-state" class="log-state">展开后自动刷新</span></summary>
+    <div class="comfy-log-toolbar"><span id="comfy-log-source">尚未连接</span><span class="spacer"></span><label><input id="comfy-log-follow" type="checkbox" checked> 自动滚动</label><button id="comfy-log-refresh" type="button">刷新</button><button id="comfy-log-clear" type="button">清空显示</button></div>
+    <div id="comfy-log-output" class="comfy-log-output" role="log" aria-live="off"><div class="log-placeholder">展开面板后显示 ComfyUI 终端日志。</div></div>
+  </details>
+  <section class="table-wrap"><table><thead><tr><th>选</th><th>片段号</th><th>标题</th><th>参考素材</th><th>画面</th><th>时长</th><th>种子</th><th>状态</th><th>结果</th><th>操作</th></tr></thead><tbody id="storyboard-body"></tbody></table></section>
   <div id="global-status" class="global-status" role="status" aria-live="polite">准备就绪</div>
 </main>
 <aside id="queue-sidebar" class="queue-sidebar" aria-label="生成队列">

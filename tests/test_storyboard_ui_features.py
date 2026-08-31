@@ -76,6 +76,56 @@ def test_global_advanced_acceleration_controls_default_on_and_submit_with_every_
     assert "board.advanced_settings=normalizeAdvancedSettings" in APP
 
 
+def test_remote_comfy_address_is_editable_saved_and_tested_directly():
+    assert "function normalizeComfyInput" in APP
+    assert "value='http://'+value" in APP
+    assert "clearTimeout(saveTimer)" in APP
+    assert "await saveBoard();await health(true,value)" in APP
+    assert "targetQuery(explicitUrl)" in APP
+
+
+def test_comfy_terminal_log_panel_refreshes_only_while_open():
+    assert 'id="comfy-log-panel"' in INDEX
+    assert 'id="comfy-log-output"' in INDEX
+    assert "'/api/comfy-logs'" in APP
+    assert "if(!$('comfy-log-panel').open)return" in APP
+    assert "setInterval(refreshComfyLogs,2000)" in APP
+    assert "function cleanLogText" in APP
+    assert ".comfy-log-output" in CSS
+
+
+def test_preview_is_a_persistent_collapsible_resizable_left_sidebar():
+    assert 'id="preview-sidebar"' in INDEX
+    assert 'id="preview-sidebar-toggle"' in INDEX
+    assert 'id="preview-size-toggle"' in INDEX
+    assert "function setPreviewSidebarState" in APP
+    assert "ref2va.previewCollapsed" in APP
+    assert "ref2va.previewEnlarged" in APP
+    assert ".preview-sidebar.collapsed" in CSS
+    assert ".preview-sidebar.enlarged" in CSS
+    assert ".preview-sidebar-head>div:first-child" in CSS
+    assert "展开预览 →" in APP
+    assert "← 展开队列" in APP
+
+
+def test_device_and_cloud_ip_controls_live_in_the_top_right_header():
+    header = INDEX.split('<header class="app-header">', 1)[1].split("</header>", 1)[0]
+    advanced = INDEX.split('<details id="advanced-settings"', 1)[1].split("</details>", 1)[0]
+    assert 'id="generation-target"' in header
+    assert 'id="comfy-url"' in header
+    assert '云端 ComfyUI' in header
+    assert '云端 IP' in header
+    assert 'id="generation-target"' not in advanced
+    assert 'id="comfy-url"' not in advanced
+    assert "await saveBoard();await health()" in APP
+
+
+def test_storyboard_table_omits_prompt_summary_column():
+    assert "提示词摘要" not in INDEX
+    assert "promptSummary(" not in APP
+    assert "td.colSpan=10" in APP
+
+
 def test_browser_validation_accepts_freeform_prompt_text():
     assert "if(!s.prompt.trim())errors.push('提示词不能为空')" in APP
     assert "['subject_definitions:'" not in APP

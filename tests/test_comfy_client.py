@@ -28,6 +28,8 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/system_stats":
             self._send(200, {"system": {"comfyui_version": "test"}})
+        elif parsed.path == "/internal/logs/raw":
+            self._send(200, {"entries": [{"t": "2026-01-01T00:00:00", "m": "[INFO] ready\n"}]})
         elif parsed.path == "/queue":
             self._send(200, {"queue_running": [], "queue_pending": []})
         elif parsed.path == "/history/abc":
@@ -67,6 +69,7 @@ def client():
 
 def test_client_calls_local_api(client):
     assert client.system_stats()["system"]["comfyui_version"] == "test"
+    assert client.logs()["entries"][0]["m"] == "[INFO] ready\n"
     assert client.queue()["queue_running"] == []
     assert client.history("abc")["abc"]["status"]["completed"] is True
 

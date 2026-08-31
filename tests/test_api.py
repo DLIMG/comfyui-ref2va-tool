@@ -16,6 +16,9 @@ class FakeComfy:
     def system_stats(self):
         return {"system": {"comfyui_version": "test"}}
 
+    def logs(self):
+        return {"entries": [{"t": "2026-01-01T00:00:00", "m": "[INFO] ready\n"}]}
+
     def submit(self, workflow, client_id):
         self.workflow = workflow
         return {"prompt_id": "p1", "number": 1, "node_errors": {}}
@@ -31,6 +34,14 @@ class FakeComfy:
     def cancel(self, prompt_id):
         self.cancelled_prompt_id = prompt_id
         return {"cancelled": True}
+
+
+def test_comfy_logs_proxies_terminal_entries(tmp_path):
+    response = TestClient(create_app(client=FakeComfy(), data_dir=tmp_path)).get("/api/comfy-logs")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["entries"][0]["m"] == "[INFO] ready\n"
 
 
 def test_queue_eta_adds_live_running_remainder_and_jobs_ahead():

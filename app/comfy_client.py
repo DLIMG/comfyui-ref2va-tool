@@ -139,6 +139,10 @@ class ComfyClient:
     def system_stats(self):
         return self._request("GET", "/system_stats")
 
+    def logs(self):
+        """Return ComfyUI's in-memory terminal log buffer."""
+        return self._request("GET", "/internal/logs/raw")
+
     def free_memory(self, unload_models: bool = False):
         """Ask ComfyUI to release caches, optionally unloading resident models."""
         return self._request(

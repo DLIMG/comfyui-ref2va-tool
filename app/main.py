@@ -241,13 +241,29 @@ def create_app(
         return FileResponse(video)
 
     @app.get("/api/health")
-    def health():
+    def health(comfy_url: str | None = None):
         try:
-            target_url, target_client = current_target()
+            if comfy_url:
+                target_url = normalize_comfy_url(comfy_url)
+                target_client = client_for_url(target_url)
+            else:
+                target_url, target_client = current_target()
             stats = target_client.system_stats()
             return {"ok": True, "stats": stats, "comfy_url": target_url, "template": str(template_file)}
         except Exception as exc:
             return {"ok": False, "error": str(exc), "template": str(template_file)}
+
+    @app.get("/api/comfy-logs")
+    def comfy_logs(comfy_url: str | None = None):
+        try:
+            target_url = normalize_comfy_url(comfy_url) if comfy_url else configured_comfy_url(
+                load_project(data / "storyboard.json")
+            )
+            payload = client_for_url(target_url).logs()
+            entries = payload.get("entries", []) if isinstance(payload, dict) else []
+            return {"ok": True, "comfy_url": target_url, "entries": entries[-500:]}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "entries": []}
 
     @app.post("/api/memory/cleanup")
     def cleanup_memory(body: MemoryCleanupBody):
