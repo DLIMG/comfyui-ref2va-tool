@@ -16,7 +16,7 @@ def main():
     url = f"http://127.0.0.1:{args.port}"
     if not args.no_browser:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
-    print(f"Ref2VA 工具已启动: {url}")
+    print(f"H3 连续镜头工作台已启动: {url}")
     print("关闭此窗口即可停止工具。")
     uvicorn.run("app.main:app", host=args.host, port=args.port, log_level="info")
 

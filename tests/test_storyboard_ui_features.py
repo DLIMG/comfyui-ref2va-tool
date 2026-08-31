@@ -126,6 +126,12 @@ def test_storyboard_table_omits_prompt_summary_column():
     assert "td.colSpan=10" in APP
 
 
+def test_product_name_reflects_the_full_h3_workflow():
+    assert "H3 连续镜头工作台" in INDEX
+    assert "Ref2VA 表格故事板" not in INDEX
+    assert "R2VA · FL2VA · Latent 续镜" in INDEX
+
+
 def test_browser_validation_accepts_freeform_prompt_text():
     assert "if(!s.prompt.trim())errors.push('提示词不能为空')" in APP
     assert "['subject_definitions:'" not in APP

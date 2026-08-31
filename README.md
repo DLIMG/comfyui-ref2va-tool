@@ -4,12 +4,12 @@
 
 ## 成果展示
 
-> 点击封面播放轻量预览；仓库中的演示版经过压缩，原始成片未纳入版本控制。
+> 点击封面直接打开轻量 MP4；若浏览器不自动播放，可使用下方“播放 / 下载”链接。仓库中的演示版经过压缩，原始成片未纳入版本控制。
 
 | 短剧测试：《外星人来地球当群演》 | 小猫唱歌一镜到底 |
 | --- | --- |
-| [![《外星人来地球当群演》视频封面](docs/showcase/alien-extra.jpg)](docs/showcase/alien-extra.mp4) | [![小猫唱歌一镜到底视频封面](docs/showcase/cat-one-take.jpg)](docs/showcase/cat-one-take.mp4) |
-| 83 秒竖屏短剧测试，验证多镜头叙事与角色 / 场景连续性。 | 30 秒竖屏连续镜头，验证参考视频动作、原声与 AV Latent 接续。 |
+| [![《外星人来地球当群演》视频封面](docs/showcase/alien-extra.jpg)](https://github.com/DLIMG/comfyui-ref2va-tool/raw/refs/heads/main/docs/showcase/alien-extra.mp4) | [![小猫唱歌一镜到底视频封面](docs/showcase/cat-one-take.jpg)](https://github.com/DLIMG/comfyui-ref2va-tool/raw/refs/heads/main/docs/showcase/cat-one-take.mp4) |
+| 83 秒竖屏短剧测试，验证多镜头叙事与角色 / 场景连续性。<br>[▶ 播放 / 下载 MP4](https://github.com/DLIMG/comfyui-ref2va-tool/raw/refs/heads/main/docs/showcase/alien-extra.mp4) | 30 秒竖屏连续镜头，验证参考视频动作、原声与 AV Latent 接续。<br>[▶ 播放 / 下载 MP4](https://github.com/DLIMG/comfyui-ref2va-tool/raw/refs/heads/main/docs/showcase/cat-one-take.mp4) |
 
 ## 主要能力
 

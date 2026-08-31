@@ -160,7 +160,7 @@ def create_app(
     comfy_input: str | Path | None = None,
     comfy_output: str | Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="ComfyUI Ref2VA Tool")
+    app = FastAPI(title="H3 Continuous Shot Studio")
     fixed_client = client
     comfy_clients: dict[str, Any] = {}
     data = Path(data_dir or ROOT / "data")
