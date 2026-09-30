@@ -14,6 +14,7 @@ REQUIRED_SECTIONS = (
     "non_diegetic_music:",
 )
 GENERATION_MODES = ("r2va", "fl2va")
+REFERENCE_IMAGE_SIZES = ("match", "max")
 
 
 def validate_shot(shot: dict[str, Any]) -> list[str]:
@@ -22,10 +23,14 @@ def validate_shot(shot: dict[str, Any]) -> list[str]:
     continuation = bool(shot.get("continue_from_previous", False))
     if generation_mode not in GENERATION_MODES:
         errors.append(f"不支持的生成模式: {generation_mode}")
+    reference_image_size = str(shot.get("reference_image_size") or "match")
+    if reference_image_size not in REFERENCE_IMAGE_SIZES:
+        errors.append("参考图尺寸策略仅支持 match 或 max")
     references = shot.get("references") or []
     reference_videos = shot.get("reference_videos") or []
-    if not references and not reference_videos:
-        errors.append("至少添加一张参考图或一段参考视频")
+    reference_audios = shot.get("reference_audios") or []
+    if not references and not reference_videos and not reference_audios:
+        errors.append("至少添加一张参考图、一段参考视频或一段参考音频")
     if generation_mode == "fl2va" and not continuation and len(references) < 2:
         errors.append("FL2VA首段必须依次提供首帧和尾帧")
     if continuation and not str(shot.get("previous_output_name") or "").strip():
@@ -37,12 +42,22 @@ def validate_shot(shot: dict[str, Any]) -> list[str]:
         errors.append("参考视频最多3段")
     if generation_mode != "r2va" and reference_videos:
         errors.append("参考视频当前仅支持R2VA模式")
+    if len(reference_audios) > 3:
+        errors.append("纯音频参考最多3段")
+    if generation_mode != "r2va" and reference_audios:
+        errors.append("参考音频当前仅支持R2VA模式")
     for index, reference in enumerate(reference_videos, start=1):
         path = Path(str(reference))
         if not path.is_file():
             errors.append(f"参考视频不存在（Video {index}）: {reference}")
         elif path.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm"}:
             errors.append(f"参考视频格式不支持（Video {index}）: {reference}")
+    for index, reference in enumerate(reference_audios, start=1):
+        path = Path(str(reference))
+        if not path.is_file():
+            errors.append(f"参考音频不存在（Audio {index}）: {reference}")
+        elif path.suffix.lower() not in {".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"}:
+            errors.append(f"参考音频格式不支持（Audio {index}）: {reference}")
 
     prompt = str(shot.get("prompt") or "")
     if not prompt.strip():

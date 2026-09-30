@@ -1,0 +1,17 @@
+[Unit]
+Description=Ref2VA read-only device monitor API
+After=network-online.target
+
+[Service]
+Type=simple
+User=tkai
+ExecStart=/usr/bin/python3 /opt/ref2va-device-monitor/server.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

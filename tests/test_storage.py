@@ -19,8 +19,7 @@ def test_default_project_enables_global_acceleration():
         "sage_attention_enabled": True,
         "sampling_steps": 8,
         "resolution": "0.4mp",
-        "auto_upscale_enabled": False,
-        "upscale_resolution": "720p",
+        "refine_target_resolution": "0.9mp",
         "generation_target": "local",
         "comfy_url": "http://192.168.11.103:8188",
     }

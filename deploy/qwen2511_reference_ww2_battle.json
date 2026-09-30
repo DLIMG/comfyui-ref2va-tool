@@ -1,0 +1,25 @@
+{
+  "prompt": {
+    "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_0.gguf"}},
+    "2": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 3.1}},
+    "3": {"class_type": "CFGNorm", "inputs": {"model": ["2", 0], "strength": 1.0}},
+    "4": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
+    "5": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
+    "6": {"class_type": "LoadImage", "inputs": {"image": "ww2_soldier_reference.png"}},
+    "7": {
+      "class_type": "TextEncodeQwenImageEdit",
+      "inputs": {
+        "clip": ["4", 0],
+        "vae": ["5", 0],
+        "image": ["6", 0],
+        "prompt": "以参考图中的同一位成年中国男性士兵为唯一主角，严格保留他的脸型、短黑发、灰蓝色抗日战争时期军装、军帽、皮腰带、帆布弹药袋、绑腿和布鞋。竖屏 2:3 写实电影战场镜头：他在1940年代中国山地战场的战壕边缘站立并举步射击，双手使用一支年代正确的步枪，对远处敌方阵地交战；表情坚毅专注，衣袖和脸颊有可见擦伤、尘土、汗水与少量干涸血迹，军装有有限血污。背景是硝烟、泥土、炸裂的土墙、远处模糊的敌方士兵和火光，强烈但真实的自然逆光，动态战地摄影，人物全身清晰锐利。允许战场血污与轻中度伤口，但不要肢体残缺、内脏、近景尸体或极端血腥。不要四格面板、不要文字、不要水印、不要现代装备。"
+      }
+    },
+    "8": {"class_type": "TextEncodeQwenImageEdit", "inputs": {"clip": ["4", 0], "prompt": ""}},
+    "9": {"class_type": "EmptySD3LatentImage", "inputs": {"width": 768, "height": 1152, "batch_size": 1}},
+    "10": {"class_type": "KSampler", "inputs": {"model": ["3", 0], "positive": ["7", 0], "negative": ["8", 0], "latent_image": ["9", 0], "seed": 19400816, "steps": 20, "cfg": 4.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+    "11": {"class_type": "VAEDecode", "inputs": {"samples": ["10", 0], "vae": ["5", 0]}},
+    "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0], "filename_prefix": "qwen2511_reference_ww2_battle"}}
+  },
+  "client_id": "codex-qwen2511-reference-battle"
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=Ref2VA extended read-only device monitor
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ref2va-device-monitor-agent
+Environment=REF2VA_MONITOR_PORT=8191
+ExecStart=/usr/bin/python3 %h/ref2va-device-monitor-agent/server.py
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/ref2va-device-monitor-agent
+
+[Install]
+WantedBy=default.target

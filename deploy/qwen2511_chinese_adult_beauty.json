@@ -1,0 +1,90 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "UnetLoaderGGUF",
+      "inputs": {
+        "unet_name": "qwen-image-edit-2511-Q4_0.gguf"
+      }
+    },
+    "2": {
+      "class_type": "ModelSamplingAuraFlow",
+      "inputs": {
+        "model": ["1", 0],
+        "shift": 3.1
+      }
+    },
+    "3": {
+      "class_type": "CFGNorm",
+      "inputs": {
+        "model": ["2", 0],
+        "strength": 1.0
+      }
+    },
+    "4": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    "5": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "qwen_image_vae.safetensors"
+      }
+    },
+    "6": {
+      "class_type": "TextEncodeQwenImageEdit",
+      "inputs": {
+        "clip": ["4", 0],
+        "prompt": "一位25岁成年中国女性，时尚优雅且性感迷人，穿剪裁精致的黑色晚礼服，端庄自信地站在现代城市夜景露台，微卷黑发，细腻自然的皮肤质感，电影级人像摄影，柔和轮廓光，真实面部细节，半身到三分之二身构图，高级时尚杂志质感，无文字，无水印，无裸露。"
+      }
+    },
+    "7": {
+      "class_type": "TextEncodeQwenImageEdit",
+      "inputs": {
+        "clip": ["4", 0],
+        "prompt": ""
+      }
+    },
+    "8": {
+      "class_type": "EmptySD3LatentImage",
+      "inputs": {
+        "width": 768,
+        "height": 1152,
+        "batch_size": 1
+      }
+    },
+    "9": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": ["3", 0],
+        "positive": ["6", 0],
+        "negative": ["7", 0],
+        "latent_image": ["8", 0],
+        "seed": 256031,
+        "steps": 20,
+        "cfg": 4.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0
+      }
+    },
+    "10": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["9", 0],
+        "vae": ["5", 0]
+      }
+    },
+    "11": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": ["10", 0],
+        "filename_prefix": "qwen2511_chinese_adult_beauty"
+      }
+    }
+  },
+  "client_id": "codex-qwen2511-test"
+}

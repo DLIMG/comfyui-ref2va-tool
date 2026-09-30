@@ -1,0 +1,22 @@
+{
+  "prompt": {
+    "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "qwen-image-edit-2511-Q4_0.gguf"}},
+    "2": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": 3.1}},
+    "3": {"class_type": "CFGNorm", "inputs": {"model": ["2", 0], "strength": 1.0}},
+    "4": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors", "type": "qwen_image", "device": "default"}},
+    "5": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
+    "6": {
+      "class_type": "TextEncodeQwenImageEdit",
+      "inputs": {
+        "clip": ["4", 0],
+        "prompt": "16:9 横向电影级角色设定参考图，画面严格划分为四个等宽竖向面板，四格之间有细窄留白，无标题、无文字、无水印。主体始终是同一位25岁成年中国男性士兵，抗日战争时期约1940年，坚毅清瘦的东方面孔，短黑发，深褐色眼睛，脸颊有自然风尘与轻微晒痕；灰蓝色棉布军装、八路军式样军帽、旧皮腰带、帆布弹药袋、绑腿与布鞋，布料有真实磨损和尘土，不携带现代装备，不出现日本军旗或任何现代标志。第一格：半身定妆肖像，正视镜头，清晰展示面部、军帽、领口和装备细节；第二格：全身正面三视图，双臂自然下垂；第三格：同一角色全身左侧面三视图，姿势中性，保持完全相同的服装与比例；第四格：同一角色全身背面三视图，清晰展示后背、腰带、弹药袋和绑腿。中性浅灰摄影棚背景，统一柔和顶侧光，写实影视角色设计，精确的人体比例，四格身份、脸型、发型和服装完全一致，无战斗场面，无血腥。"
+      }
+    },
+    "7": {"class_type": "TextEncodeQwenImageEdit", "inputs": {"clip": ["4", 0], "prompt": ""}},
+    "8": {"class_type": "EmptySD3LatentImage", "inputs": {"width": 1152, "height": 648, "batch_size": 1}},
+    "9": {"class_type": "KSampler", "inputs": {"model": ["3", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["8", 0], "seed": 19400815, "steps": 20, "cfg": 4.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+    "10": {"class_type": "VAEDecode", "inputs": {"samples": ["9", 0], "vae": ["5", 0]}},
+    "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": "qwen2511_ww2_chinese_soldier_turnaround"}}
+  },
+  "client_id": "codex-qwen2511-character-sheet"
+}

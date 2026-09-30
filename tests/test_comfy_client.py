@@ -89,12 +89,18 @@ def test_free_memory_keeps_models_loaded_by_default(client):
 
 def test_upload_input_and_download_output(client):
     uploaded = client.upload_input("reference.png", b"image-bytes")
-    downloaded = client.download_output({"filename": "movie.mp4", "subfolder": "clips", "type": "output"})
+    progress = []
+    downloaded = client.download_output(
+        {"filename": "movie.mp4", "subfolder": "clips", "type": "output"},
+        lambda received, total: progress.append((received, total)),
+    )
 
     assert uploaded["subfolder"] == "codex_ref2va_tool"
     assert b'filename="reference.png"' in Handler.uploaded
     assert b"image-bytes" in Handler.uploaded
     assert downloaded == b"video-bytes"
+    assert progress[-1][0] == len(downloaded)
+    assert progress[-1][1] == len(downloaded)
 
 
 def test_error_response_raises_readable_error(client):

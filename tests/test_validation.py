@@ -37,7 +37,7 @@ def test_invalid_shot_returns_chinese_errors(tmp_path):
 
 def test_requires_at_least_one_reference():
     errors = validate_shot({"references": [], "prompt": valid_prompt(), "duration": 6, "output_name": "ok"})
-    assert "至少添加一张参考图或一段参考视频" in errors
+    assert "至少添加一张参考图、一段参考视频或一段参考音频" in errors
 
 
 def test_r2va_accepts_video_as_the_only_reference(tmp_path):
@@ -68,6 +68,16 @@ def test_rejects_unknown_generation_mode(tmp_path):
         "prompt": valid_prompt(), "duration": 6, "output_name": "ok",
     })
     assert "生成模式" in " ".join(errors)
+
+
+def test_rejects_unknown_reference_image_size(tmp_path):
+    image = tmp_path / "图.png"
+    image.write_bytes(b"x")
+    errors = validate_shot({
+        "references": [str(image)], "prompt": valid_prompt(), "duration": 6,
+        "output_name": "ok", "reference_image_size": "custom",
+    })
+    assert any("match" in error and "max" in error for error in errors)
 
 
 def test_fl2va_first_shot_requires_first_and_last_frames(tmp_path):

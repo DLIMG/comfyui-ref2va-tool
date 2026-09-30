@@ -5,7 +5,7 @@ import mimetypes
 import uuid
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 from urllib import error, request
 
 
@@ -139,6 +139,9 @@ class ComfyClient:
     def system_stats(self):
         return self._request("GET", "/system_stats")
 
+    def object_info(self):
+        return self._request("GET", "/object_info")
+
     def logs(self):
         """Return ComfyUI's in-memory terminal log buffer."""
         return self._request("GET", "/internal/logs/raw")
@@ -178,7 +181,11 @@ class ComfyClient:
             content,
         )
 
-    def download_output(self, output: dict[str, str]) -> bytes:
+    def download_output(
+        self,
+        output: dict[str, str],
+        progress_callback: Callable[[int, int | None], None] | None = None,
+    ) -> bytes:
         from urllib.parse import urlencode
 
         query = urlencode({
@@ -188,6 +195,17 @@ class ComfyClient:
         })
         try:
             with request.urlopen(f"{self.base_url}/view?{query}", timeout=max(self.timeout, 120)) as response:
-                return response.read()
+                total_header = response.headers.get("Content-Length")
+                total = int(total_header) if total_header and total_header.isdigit() else None
+                received = 0
+                chunks: list[bytes] = []
+                if progress_callback:
+                    progress_callback(0, total)
+                while chunk := response.read(1024 * 1024):
+                    chunks.append(chunk)
+                    received += len(chunk)
+                    if progress_callback:
+                        progress_callback(received, total)
+                return b"".join(chunks)
         except (error.HTTPError, error.URLError, TimeoutError) as exc:
             raise ComfyError(f"下载 ComfyUI 输出失败: {exc}") from exc

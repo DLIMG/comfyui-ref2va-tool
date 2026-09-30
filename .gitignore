@@ -24,6 +24,16 @@ data/results/
 data/remote_staging/
 data/diagnostics/
 data/audit_contact_sheets/
+data/imports/
+data/audio_cache/
+data/backups/
+data/logs/
+data/project_states/
+data/tmp_compare/
+data/*_contact.jpg
+data/*_contactsheet.jpg
+data/*.bak
+data/* - 副本.json
 
 # 备份文件
 data/storyboard.backup-*.json

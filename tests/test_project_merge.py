@@ -134,6 +134,7 @@ def test_project_merge_script_is_served_and_loaded_before_app(tmp_path):
 def test_import_handler_merges_before_assignment_and_reports_errors():
     source = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
 
-    assert "Ref2VAProjectMerge.mergeImportedProject(board,imported)" in source
+    assert "await api('/api/storyboard/import'" in source
+    assert "board=restored.project" in source
     assert "catch(e)" in source
     assert "导入失败：" in source

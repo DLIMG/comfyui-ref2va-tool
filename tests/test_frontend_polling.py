@@ -16,10 +16,10 @@ def test_repeated_collection_error_does_not_rerender_storyboard():
     function_source = collect_results_source()
     error_branch = function_source.split("catch(e)", 1)[1]
 
-    assert "const message='结果收集：'+e.message" in error_branch
+    assert "const message='结果回传：'+e.message" in error_branch
     assert "if(s.error!==message)" in error_branch
     assert "updateEditorMessage(s,message)" in error_branch
-    assert "render()" not in error_branch
+    assert "if(s.error!==message){s.error=message;updateEditorMessage(s,message);scheduleSave();render()}" in error_branch
 
 
 def test_api_reports_plain_text_server_errors_instead_of_json_parse_errors():
@@ -35,31 +35,34 @@ def test_polling_recovers_failed_shot_when_prompt_was_actually_accepted():
     source = APP_JS.read_text(encoding="utf-8")
     poll = source[source.index("async function pollStatuses") : source.index("async function openOutput")]
 
-    assert "['queued','running','failed'].includes(x.status)" in poll
+    assert "['queued','running','syncing','failed'].includes(x.status)" in poll
 
 
-def test_result_cards_offer_720p_upscale_and_poll_jobs():
+def test_result_cards_offer_h3_refine():
     source = APP_JS.read_text(encoding="utf-8")
     render = source[source.index("function renderResults") : source.index("function formatTime")]
 
-    assert "data-upscale-result" in render
-    assert "upscale_resolution" in render
-    assert "放大到${target}" in render
-    assert "async function submitUpscale" in source
-    assert "async function pollUpscales" in source
-    assert "/api/results/upscale/collect" in source
+    assert "data-refine-shot" in render
+    assert "refine_target_resolution" in render
+    assert "async function submitRefine" in source
+    assert "/api/refine" in source
 
 
-def test_global_settings_offer_one_click_upscale_all_results():
+def test_result_delete_clears_the_frontend_prompt_collection_marker():
+    source = APP_JS.read_text(encoding="utf-8")
+    render = source[source.index("function renderResults") : source.index("function formatTime")]
+
+    assert "s.prompt_id=d.prompt_id||''" in render
+
+
+def test_global_settings_offer_batch_h3_refine():
     source = APP_JS.read_text(encoding="utf-8")
     html = INDEX_HTML.read_text(encoding="utf-8")
 
-    assert 'id="upscale-all-results"' in html
-    assert "一键放大全部" in html
-    assert "function pendingUpscaleResults" in source
-    assert "async function submitAllUpscales" in source
-    assert "$('upscale-all-results').onclick=submitAllUpscales" in source
-    assert "item.source_result_id===result.id" in source
+    assert 'id="refine-selected"' in html
+    assert "二采选中分镜" in html
+    assert "async function refineSelected" in source
+    assert "$('refine-selected').onclick=refineSelected" in source
 
 
 def test_index_loads_playlist_before_app_and_has_continuous_preview_controls():
@@ -228,23 +231,15 @@ def test_polling_prefers_backend_live_sampling_eta():
     assert "if(d.error&&s.error!==d.error)" in poll
 
 
-def test_batch_generation_is_serial_and_cleans_cache_without_unloading_models():
+def test_batch_generation_is_prequeued_so_browser_suspension_cannot_stop_it():
     source = APP_JS.read_text(encoding="utf-8")
     scheduler = source[source.index("async function waitForShot") : source.index("async function pollStatuses")]
 
-    assert "await waitForShot(s)" in scheduler
+    assert "await waitForShot(s)" not in scheduler
     assert "submitShot(s,null,true)" in scheduler
-    assert "await cleanupBetweenShots(false)" in scheduler
-    assert "cleanupBetweenShotsSafely" in scheduler
-    assert "缓存清理失败，但不会中断批量生成" in scheduler
-    assert "正在提交下一镜" in scheduler
-    assert "unload_models:unloadModels" in scheduler
-    assert "oom_recovery:oomRecovery" in scheduler
-    assert "out of memory" in scheduler
-    assert "break" in scheduler
+    assert "已全部进入 ComfyUI 队列，锁屏也会继续" in scheduler
     assert "await preflightBatch(shots)" in scheduler
     assert "previous_in_batch" in scheduler
-    assert "完成并保存 Latent 后才会继续下一镜" in scheduler
 
 
 def test_upscale_and_h3_generation_are_not_cross_submitted():

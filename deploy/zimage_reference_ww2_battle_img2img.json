@@ -1,0 +1,18 @@
+{
+  "prompt": {
+    "1": {"class_type": "LoadImage", "inputs": {"image": "ww2_soldier_reference.png"}},
+    "2": {"class_type": "ImageCrop", "inputs": {"image": ["1", 0], "width": 418, "height": 627, "x": 0, "y": 0}},
+    "3": {"class_type": "ImageScale", "inputs": {"image": ["2", 0], "upscale_method": "lanczos", "width": 1024, "height": 1536, "crop": "disabled"}},
+    "4": {"class_type": "UNETLoader", "inputs": {"unet_name": "z_image_turbo_nvfp4.safetensors", "weight_dtype": "default"}},
+    "5": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["4", 0], "shift": 3.0}},
+    "6": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_3_4b_fp4_mixed.safetensors", "type": "lumina2", "device": "default"}},
+    "7": {"class_type": "VAELoader", "inputs": {"vae_name": "z_image_turbo_ae.safetensors"}},
+    "8": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["6", 0], "text": "将参考图中的同一位成年中国男性士兵置于1940年代中国山地战场。必须保留他的脸型、短黑发、军帽、灰蓝色棉布军装、旧皮腰带、帆布弹药袋和绑腿；不要改变身份、年龄或服装。竖屏2:3写实战争电影镜头：他在泥土战壕中双手举起年代正确的步枪，朝远处敌方阵地射击，神情坚毅、动作自然。脸颊有擦伤与尘土，军装和前臂有少量战场血污；烟雾、土墙、远景火光和模糊的交战人影。主体清晰锐利，真实皮肤、布料、枪械与装备细节。允许轻中度伤口和血迹，不要肢体残缺、内脏或极端血腥；无现代装备、无文字、无水印、无四格面板。"}},
+    "9": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["8", 0]}},
+    "10": {"class_type": "VAEEncode", "inputs": {"pixels": ["3", 0], "vae": ["7", 0]}},
+    "11": {"class_type": "KSampler", "inputs": {"model": ["5", 0], "seed": 19400817, "steps": 8, "cfg": 1.0, "sampler_name": "res_multistep", "scheduler": "simple", "positive": ["8", 0], "negative": ["9", 0], "latent_image": ["10", 0], "denoise": 0.72}},
+    "12": {"class_type": "VAEDecode", "inputs": {"samples": ["11", 0], "vae": ["7", 0]}},
+    "13": {"class_type": "SaveImage", "inputs": {"images": ["12", 0], "filename_prefix": "zimage_reference_ww2_battle_img2img"}}
+  },
+  "client_id": "codex-zimage-reference-ww2-battle"
+}

@@ -1,0 +1,7 @@
+[Unit]
+Description=Activate ComfyUI after Qwen Image Edit 2511 download
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'until test -f /home/tkai/.qwen2511-download-complete; do sleep 60; done; systemctl restart comfyui.service'
