@@ -1,8 +1,40 @@
 from pathlib import Path
+import subprocess
 
 
 APP_JS = Path(__file__).parents[1] / "app" / "static" / "app.js"
 INDEX_HTML = Path(__file__).parents[1] / "app" / "static" / "index.html"
+
+
+def test_result_refine_click_shows_errors_progress_and_prevents_duplicate_requests():
+    script = r"""
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const source=fs.readFileSync(process.argv[1],'utf8');
+const code=source.slice(source.indexOf('let resultRefineSubmitting=false;'),source.indexOf('let batchScheduling=false;'));
+const status={textContent:''},notices=[],button={textContent:'二采',disabled:false};
+let calls=0,rejectRequest;
+const context={refineSubmitting:false,$:()=>status,updateEditorMessage:(s,m)=>notices.push(m),
+ saveBoard:async()=>{},submitRefine:async()=>{calls++;return new Promise((resolve,reject)=>{rejectRequest=reject})}};
+vm.createContext(context);vm.runInContext(code,context);
+(async()=>{
+ const pending=context.refineResult({id:'C1'},'result',button);
+ await Promise.resolve();
+ assert.equal(button.disabled,true);assert.equal(button.textContent,'正在提交…');
+ assert(status.textContent.includes('正在提交'));
+ await context.refineResult({id:'C1'},'result',button);
+ assert.equal(calls,1);
+ rejectRequest(new Error('无法确认旧版 latent 归属'));
+ await pending;
+ assert(status.textContent.includes('精修提交失败：无法确认旧版 latent 归属'));
+ assert(notices.at(-1).includes('无法确认旧版 latent 归属'));
+ assert.equal(button.disabled,false);assert.equal(button.textContent,'二采');
+ context.submitRefine=async()=>({refine_job:{pass_number:2}});
+ await context.refineResult({id:'C1'},'result',button);
+ assert(status.textContent.includes('已提交2采'));assert(notices.at(-1).includes('已提交2采'));
+ assert.equal(button.disabled,false);
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    subprocess.run(["node", "-e", script, str(APP_JS)], check=True, capture_output=True, text=True)
 
 
 def collect_results_source() -> str:
@@ -42,10 +74,14 @@ def test_result_cards_offer_h3_refine():
     source = APP_JS.read_text(encoding="utf-8")
     render = source[source.index("function renderResults") : source.index("function formatTime")]
 
-    assert "data-refine-shot" in render
+    # 每张卡片自己带档位：点一采做二采、点二采做三采，而不是一律"往上一档"，
+    # 否则删掉二采后重新二采会被算成三采。
+    assert "data-refine-result=" in render
+    assert "resultPass(r)+1" in render
     assert "refine_target_resolution" in render
     assert "async function submitRefine" in source
     assert "/api/refine" in source
+    assert "source_result_id" in source
 
 
 def test_result_delete_clears_the_frontend_prompt_collection_marker():
@@ -53,6 +89,19 @@ def test_result_delete_clears_the_frontend_prompt_collection_marker():
     render = source[source.index("function renderResults") : source.index("function formatTime")]
 
     assert "s.prompt_id=d.prompt_id||''" in render
+    # 服务端作废了二采链，前端内存里的 refine_job 也要立刻丢掉并落盘。
+    assert "if(d.refine_cleared)delete s.refine_job" in render
+
+
+def test_result_panel_offers_a_comfyui_restore_button():
+    """永久删除只删本机副本，ComfyUI 历史里还留着，所以界面要留一条回头路。"""
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = APP_JS.read_text(encoding="utf-8")
+    render = source[source.index("function renderResults") : source.index("function formatTime")]
+
+    assert 'class="restore-results"' in html
+    assert ".restore-results" in (Path(__file__).parents[1] / "app" / "static" / "app.css").read_text(encoding="utf-8")
+    assert "/api/results/restore" in render
 
 
 def test_global_settings_offer_batch_h3_refine():

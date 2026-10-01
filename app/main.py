@@ -17,9 +17,19 @@ from pydantic import BaseModel, Field
 
 from .comfy_client import ComfyClient, ComfyError
 from .director_pack import MAX_PACK_UNCOMPRESSED_BYTES, convert_director_pack, extract_director_pack
+from .latent_versions import (
+    add_versioned_latent_output, history_workflow, latent_run, record_latent_run,
+    validate_result_latent, versioned_latent_name,
+)
 from .picker import pick_files
 from .prompt_director import compile_director_prompt, normalize_director
 from .project_state import persist_project_runtime, restore_imported_project
+from .refine_chain import (
+    latent_name_for_pass,
+    output_pass,
+    plan_refine_from_result,
+    refresh_refine_chain,
+)
 from .results import (
     delete_managed_result,
     find_fallback_outputs,
@@ -29,6 +39,7 @@ from .results import (
     preserve_downloaded_results,
     resolve_managed_results_root,
 )
+from .source_mirror import SOURCE_PATH_FIELD, mirror_source_json, normalize_source_path
 from .storage import (
     load_project, migrate_project_references, save_project, save_uploaded_image,
     save_uploaded_video, save_uploaded_audio_media, stage_audio, stage_image, stage_video,
@@ -148,11 +159,27 @@ class CollectResultBody(BaseModel):
     shot_id: str
 
 
+class RestoreFile(BaseModel):
+    filename: str
+    subfolder: str = "codex_ref2va_tool"
+    type: str = "output"
+    prompt_id: str = ""
+
+
+class RestoreResultsBody(BaseModel):
+    shot_id: str
+    # 留空表示"把 ComfyUI 里还找得到、但本机已丢失的结果全部拉回来"。
+    files: list[RestoreFile] = Field(default_factory=list)
+
+
 class RefineBody(BaseModel):
     shot_id: str
     target_resolution: str = "0.9mp"
     source_latent_name: str = ""
     pass_number: int = Field(default=2, ge=2, le=9)
+    # 用户点的是哪条视频。给了它就以它为准推导档位与输入 latent，
+    # 这样"删掉二采后重新二采"仍然是二采，而不是接着往下变成三采。
+    source_result_id: str = ""
     # 默认整张直出（低噪声重采，不分块）；只有真放大到单块仍超显存时才开时空瓦片。
     split_tiling: bool = False
 
@@ -176,6 +203,13 @@ class BatchPreflightBody(BaseModel):
 
 class ImportProjectBody(BaseModel):
     project: dict[str, Any]
+
+
+class SourceFileBody(BaseModel):
+    """绑定/解绑「源 JSON」，可选顺带把该文件导入为当前项目。"""
+
+    path: str = ""
+    import_now: bool = False
 
 
 class VideoAnalyzerImportBody(BaseModel):
@@ -468,7 +502,43 @@ def create_app(
         project = migrate_project_references(project, migrations)
         save_project(data / "storyboard.json", project)
         state_path = persist_project_runtime(project, data)
-        return {"ok": True, "state_path": str(state_path)}
+        mirror = mirror_source_json(project)
+        return {"ok": True, "state_path": str(state_path), **mirror}
+
+    @app.post("/api/storyboard/source-file")
+    def bind_source_file(body: SourceFileBody):
+        """把当前项目绑定到某个 JSON 源文件（空 path = 解绑）。
+
+        绑定之后 PUT /api/storyboard 会自动把项目写回该文件。``import_now=True``
+        时先按正常导入流程把这个文件读进来合并，再建立绑定。
+        """
+        try:
+            source_path = normalize_source_path(body.path)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        current = load_project(data / "storyboard.json")
+        if not isinstance(current.get("shots"), list):
+            raise HTTPException(422, "当前没有可绑定的故事板")
+        payload = current
+        recovered = 0
+        if source_path and body.import_now:
+            try:
+                imported = json.loads(Path(source_path).read_text(encoding="utf-8-sig"))
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise HTTPException(422, f"无法读取源 JSON：{exc}") from exc
+            persist_project_runtime(current, data)
+            try:
+                payload, recovered = restore_imported_project(imported, current, data)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+        payload[SOURCE_PATH_FIELD] = source_path
+        save_project(data / "storyboard.json", payload)
+        state_path = persist_project_runtime(payload, data)
+        mirror = mirror_source_json(payload)
+        return {
+            "ok": True, "project": payload, "state_path": str(state_path),
+            "source_json_path": source_path, "recovered_results": recovered, **mirror,
+        }
 
     @app.post("/api/storyboard/import")
     def import_storyboard(body: ImportProjectBody):
@@ -592,6 +662,18 @@ def create_app(
         path = paths[0]
         return {"path": path, "text": Path(path).read_text(encoding="utf-8-sig")}
 
+    @app.post("/api/pick-json")
+    def pick_json():
+        """服务端原生文件选择框（仅 Windows 可用）。无 GUI 的机器返回 501。"""
+        try:
+            paths = pick_files("json")
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            raise HTTPException(501, f"服务端文件选择不可用，请直接填完整路径：{exc}") from exc
+        if not paths:
+            return {"path": "", "text": ""}
+        path = paths[0]
+        return {"path": path, "text": Path(path).read_text(encoding="utf-8-sig")}
+
     @app.post("/api/submit")
     def submit(body: SubmitBody):
         shot = body.model_dump()
@@ -643,11 +725,13 @@ def create_app(
                 face_swap_enabled=body.face_swap_enabled,
                 reference_image_size=body.reference_image_size,
             )
+            latent_name = add_versioned_latent_output(workflow, body.output_name)
             stamp = time.strftime("%Y%m%d-%H%M%S")
             run_dir = data / "runs" / body.output_name / f"{stamp}-{uuid.uuid4().hex[:6]}"
             run_dir.mkdir(parents=True, exist_ok=True)
             (run_dir / "workflow_api.json").write_text(json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8")
             result = target_client.submit(workflow, comfy_client_id)
+            record_latent_run(data, target_url, result["prompt_id"], body.output_name, latent_name, 1)
             (run_dir / "run.json").write_text(json.dumps({
                 "request": shot, "response": result, "director": normalize_director(body.director),
                 "director_note": director_note, "compiled_prompt": compiled_prompt,
@@ -655,7 +739,7 @@ def create_app(
             estimated_seconds = estimate_workflow_seconds(workflow)
             return {
                 **result, "run_dir": str(run_dir), "output_prefix": output_prefix,
-                "comfy_url": target_url,
+                "comfy_url": target_url, "latent_name": latent_name,
                 "adaptive_low_vram": adaptive_low_vram_enabled, "director_note": director_note,
                 "submitted_at": time.time(), "estimated_seconds": estimated_seconds,
             }
@@ -700,7 +784,27 @@ def create_app(
                     + "；请更新 Comfyui_Minimax_h3_latent_Upscaler 并重启"
                 )
             adaptive_low_vram_enabled = bool(object_info) and ADAPTIVE_LOW_VRAM_NODE in object_info
-            source_name = body.source_latent_name.strip() or str(shot.get("output_name") or "")
+            pass_number = body.pass_number
+            source_name = body.source_latent_name.strip()
+            if body.source_result_id:
+                source_result = next(
+                    (item for item in shot.get("results", []) if item.get("id") == body.source_result_id),
+                    None,
+                )
+                if source_result is None:
+                    raise ValueError("作为二采起点的视频已不在结果里，请刷新页面后重试")
+                # 以"用户点的那条视频"为准，避免链尾残留把档位继续往上推。
+                pass_number, source_name = plan_refine_from_result(shot, source_result)
+                source_url = normalize_comfy_url(source_result.get("comfy_url") or shot.get("comfy_url") or target_url)
+                if source_url != target_url:
+                    raise ValueError("二采必须与所选视频使用同一台生成设备")
+                run = latent_run(data, target_url, str(source_result.get("prompt_id") or ""))
+                source_name = str(run.get("latent_name") or source_name)
+                validate_result_latent(source_name, str(source_result.get("prompt_id") or ""), target_client)
+            if not 2 <= pass_number <= 9:
+                raise ValueError("精修档位仅支持二采至九采")
+            if not source_name:
+                source_name = str(shot.get("output_name") or "")
             if not source_name:
                 raise ValueError("缺少一采 Latent 名称")
             if target_url == LOCAL_COMFY_URL:
@@ -712,7 +816,7 @@ def create_app(
                 stage_video_for_target(path, target_url, target_client)
                 for path in shot.get("reference_videos", [])
             ]
-            output_name = f"{shot['output_name']}_p{body.pass_number}"
+            output_name = f"{shot['output_name']}_p{pass_number}"
             settings = project.get("advanced_settings") or {}
             shot_index = project.get("shots", []).index(shot)
             will_be_continued = (
@@ -721,7 +825,7 @@ def create_app(
             )
             workflow = build_refine_workflow(
                 load_template(template_file), relative_names, str(shot.get("prompt") or ""),
-                float(shot.get("duration") or 6), int(shot.get("seed") or 1) + body.pass_number - 1,
+                float(shot.get("duration") or 6), int(shot.get("seed") or 1) + pass_number - 1,
                 f"codex_ref2va_tool/{output_name}", source_name,
                 target_resolution=body.target_resolution,
                 aspect_ratio=str(shot.get("aspect_ratio") or "16:9"),
@@ -736,16 +840,21 @@ def create_app(
                 adaptive_low_vram_enabled=adaptive_low_vram_enabled,
                 split_tiling=body.split_tiling,
             )
+            latent_name = add_versioned_latent_output(workflow, output_name)
             stamp = time.strftime("%Y%m%d-%H%M%S")
             run_dir = data / "runs" / output_name / f"{stamp}-{uuid.uuid4().hex[:6]}"
             run_dir.mkdir(parents=True, exist_ok=True)
             (run_dir / "workflow_api.json").write_text(json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8")
             result = target_client.submit(workflow, comfy_client_id)
+            record_latent_run(data, target_url, result["prompt_id"], output_name, latent_name, pass_number)
             shot["refine_job"] = {
-                "status": "queued", "prompt_id": result["prompt_id"], "pass_number": body.pass_number,
+                "status": "queued", "prompt_id": result["prompt_id"], "pass_number": pass_number,
                 "source_latent_name": source_name, "output_name": output_name,
+                "latent_name": latent_name,
                 "target_resolution": body.target_resolution, "comfy_url": target_url,
                 "run_dir": str(run_dir), "error": "",
+                # 用于前端判断该二采链是否还建立在最新一采之上（重新一采后旧链作废）
+                "submitted_at": time.time(),
             }
             save_project(data / "storyboard.json", project)
             return {**result, "refine_job": shot["refine_job"]}
@@ -944,9 +1053,27 @@ def create_app(
             )
             if not added:
                 raise HTTPException(409, "找到输出记录，但视频文件尚未写入完成")
+            # 记下这批结果是被哪一采采出来的，后续"点哪条视频做二采"才有依据。
+            refine = shot.get("refine_job") or {}
+            refine_owns_prompt = str(refine.get("prompt_id") or "") == prompt_id
+            produced_pass = (int(refine.get("pass_number") or 2) if refine_owns_prompt else 1)
+            base_name = str(shot.get("output_name") or "")
+            produced_pass = output_pass(added[0]["filename"], base_name) or produced_pass
+            produced_latent = (
+                str(refine.get("output_name") or "") or latent_name_for_pass(base_name, produced_pass)
+                if refine_owns_prompt else base_name
+            )
+            run = latent_run(data, target_url, prompt_id)
+            produced_pass = int(run.get("pass_number") or produced_pass)
+            produced_latent = (run.get("latent_name") or versioned_latent_name(
+                history_workflow(history.get(prompt_id, {})), latent_name_for_pass(base_name, produced_pass)
+            ) or produced_latent)
             existing.extend(added)
             for item in added:
                 item["resolution"] = str(shot.get("resolution") or "")
+                item["pass_number"] = produced_pass
+                item["latent_name"] = produced_latent
+                item["comfy_url"] = target_url
             shot["status"] = "completed"
             shot["error"] = ""
             save_project(project_path, project)
@@ -1256,8 +1383,172 @@ def create_app(
             and not any(str(item.get("prompt_id") or "") == deleted_prompt_id for item in shot["results"])
         ):
             shot["prompt_id"] = ""
+        # 删掉的若是二采链尾产物，必须把残留的 refine_job 一起作废：否则下一次
+        # 二采会被误判成"在二采之上再采一档"，实际提交出三采。
+        refine_chain = refresh_refine_chain(shot)
         save_project(data / "storyboard.json", project)
-        return {"ok": True, "results": shot["results"], "prompt_id": str(shot.get("prompt_id") or "")}
+        return {
+            "ok": True, "results": shot["results"],
+            "prompt_id": str(shot.get("prompt_id") or ""),
+            "refine_cleared": refine_chain["cleared"],
+            "next_pass": refine_chain["max_pass"] + 1 if refine_chain["max_pass"] else 2,
+        }
+
+    def _remote_outputs_for_shot(shot: dict[str, Any], project: dict[str, Any]) -> list[dict[str, Any]]:
+        """扫描 ComfyUI 全部历史，找出属于这个分镜、且至今仍可取回的产物。"""
+        target_url = normalize_comfy_url(shot.get("comfy_url") or configured_comfy_url(project))
+        target_client = client_for_url(target_url)
+        prefix = str(shot.get("output_name") or "").strip()
+        if not prefix:
+            raise ValueError("该分镜还没有输出名称")
+        entries: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        history = target_client.histories()
+        for prompt_id, entry in history.items():
+            if not isinstance(entry, dict):
+                continue
+            workflow = history_workflow(entry)
+            run = latent_run(data, target_url, prompt_id)
+            for output in find_video_outputs(entry):
+                filename = str(output.get("filename") or "")
+                pass_number = output_pass(filename, prefix)
+                if pass_number is None:
+                    continue
+                output_name = latent_name_for_pass(prefix, pass_number)
+                if run and run.get("output_name") != output_name:
+                    continue
+                # If the original graph is available, verify the SaveVideo prefix,
+                # including its folder; identical filenames in other folders are unrelated.
+                expected_prefix = "/".join(filter(None, [str(output.get("subfolder") or ""), output_name]))
+                if workflow and not any(
+                    isinstance(node, dict) and node.get("class_type") == "SaveVideo"
+                    and str((node.get("inputs") or {}).get("filename_prefix") or "").replace("\\", "/") == expected_prefix
+                    for node in workflow.values()
+                ):
+                    continue
+                key = (prompt_id, filename)
+                if key in seen:
+                    continue
+                seen.add(key)
+                entries.append({
+                    "prompt_id": prompt_id, "filename": filename,
+                    "subfolder": str(output.get("subfolder") or ""),
+                    "type": str(output.get("type") or "output"),
+                    "pass_number": pass_number,
+                    "latent_name": run.get("latent_name") or versioned_latent_name(workflow, output_name) or output_name,
+                    "comfy_url": target_url,
+                    "completed": bool((entry.get("status") or {}).get("completed")),
+                })
+        return entries
+
+    def _local_result_filenames(shot: dict[str, Any]) -> set[str]:
+        """真正还躺在磁盘上的结果文件。
+
+        光看记录是不够的：删除事故的典型残骸就是"记录还在、文件没了"，这种
+        必须算作缺失，否则恢复功能会认为它已经有了而放着不管。
+        """
+        return {
+            str(item.get("filename") or "")
+            for item in shot.get("results", [])
+            if Path(str(item.get("path") or "")).is_file()
+        }
+
+    @app.get("/api/results/recoverable/{shot_id}")
+    def recoverable_results(shot_id: str):
+        """列出 ComfyUI 上还留着、但本机结果库里已经没有的视频。"""
+        project = load_project(data / "storyboard.json")
+        shot = next((item for item in project.get("shots", []) if item.get("id") == shot_id), None)
+        if shot is None:
+            raise HTTPException(404, "分镜不存在")
+        try:
+            present = _local_result_filenames(shot)
+            entries = _remote_outputs_for_shot(shot, project)
+        except (ValueError, ComfyError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        for item in entries:
+            item["has_local"] = item["filename"] in present
+        return {"files": entries, "missing": [item for item in entries if not item["has_local"]]}
+
+    @app.post("/api/results/restore")
+    def restore_results(body: RestoreResultsBody):
+        """把被删/丢失的结果从 ComfyUI 重新下载回结果库。
+
+        ``files`` 留空时自动恢复所有"远端还有、本机没有"的产物。
+        """
+        project_path = data / "storyboard.json"
+        project = load_project(project_path)
+        shot = next((item for item in project.get("shots", []) if item.get("id") == body.shot_id), None)
+        if shot is None:
+            raise HTTPException(404, "分镜不存在")
+        try:
+            target_url = normalize_comfy_url(shot.get("comfy_url") or configured_comfy_url(project))
+            target_client = client_for_url(target_url)
+            present = _local_result_filenames(shot)
+            # 记录还在、文件没了的那种是"删除事故"的残骸，要就地补回而不是新增一份。
+            stale_records = {
+                str(item.get("filename") or ""): item
+                for item in shot.get("results", [])
+                if str(item.get("filename") or "") not in present
+            }
+            recoverable = _remote_outputs_for_shot(shot, project)
+            if body.files:
+                wanted = []
+                for requested in body.files:
+                    matches = [item for item in recoverable
+                               if item["filename"] == requested.filename
+                               and item["subfolder"] == requested.subfolder
+                               and item["type"] == requested.type
+                               and (not requested.prompt_id or item["prompt_id"] == requested.prompt_id)]
+                    if len(matches) != 1:
+                        raise ValueError("恢复文件不属于该分镜或任务归属不明确")
+                    if requested.filename not in present and matches[0] not in wanted:
+                        wanted.append(matches[0])
+            else:
+                wanted = [item for item in recoverable if str(item["filename"]) not in present]
+            if not wanted:
+                return {"results": shot.get("results", []), "added": [], "restored": 0,
+                        "repaired": 0, "appended": 0}
+            collection_root = resolve_managed_results_root(project, results_root, create=True)
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for item in wanted:
+                grouped.setdefault(item["prompt_id"] or "recovered", []).append(item)
+            added: list[dict[str, Any]] = []
+            for prompt_id, items in grouped.items():
+                outputs = [{"filename": i["filename"], "subfolder": i["subfolder"], "type": i["type"]}
+                           for i in items]
+                added.extend(preserve_downloaded_results(
+                    outputs,
+                    lambda output: target_client.download_output(output),
+                    collection_root,
+                    project_name=str(project.get("name") or "未命名项目"),
+                    shot_id=body.shot_id,
+                    prompt_id="" if prompt_id == "recovered" else prompt_id,
+                ))
+            metadata = {(item["prompt_id"], item["filename"]): item for item in wanted}
+            restored_at = time.time()
+            results = shot.setdefault("results", [])
+            appended = 0
+            repaired = 0
+            for item in added:
+                recovered = metadata[(item["prompt_id"], item["filename"])]
+                item["pass_number"] = recovered["pass_number"]
+                item["latent_name"] = recovered["latent_name"]
+                item["comfy_url"] = target_url
+                item["restored_at"] = restored_at
+                stale = stale_records.get(str(item.get("filename") or ""))
+                if stale is not None:
+                    stale.update(item)
+                    repaired += 1
+                else:
+                    results.append(item)
+                    appended += 1
+            save_project(project_path, project)
+            return {"results": results, "added": added, "restored": len(added),
+                    "repaired": repaired, "appended": appended}
+        except HTTPException:
+            raise
+        except (ValueError, FileNotFoundError, ComfyError) as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     @app.get("/api/output-dir")
     def output_dir():

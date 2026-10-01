@@ -29,8 +29,11 @@ description: 当需要使用、启动、配置或排查 comfyui-ref2va-tool 与 
 5. 提交前先保存。使用“生成选中”提交勾选片段，或用“全部排队”按故事板顺序提交。
 6. 每次生成都会新增结果，不覆盖旧视频；不要为了重新生成而删除仍可用的旧结果。
 7. 需要把视频保存进具体项目时，在JSON顶层设置绝对路径`project_dir`。结果将复制到`<project_dir>\06_生成视频`；未设置时使用工具的`data\results`。
-8. 重新导入JSON时，项目配置和片段顺序以导入文件为准；同ID片段在导入结果为空时保留当前运行状态和视频结果。生成后不要随意修改片段ID。
-9. 网页删除操作会永久删除工具管理的视频副本，但不会删除ComfyUI输出目录中的原始文件。
+8. 重新导入JSON时，项目配置和片段顺序以导入文件为准；同ID片段在导入结果为空时保留当前运行状态和视频结果。生成后不要随意修改片段ID。「打开 JSON」会自动记录源文件路径并同步回写；没有源文件路径的内容导入使用工具内部工作副本（`data/storyboard.json` 与运行时快照）。
+8.1 工具栏统一使用「打开 JSON」（走 `POST /api/storyboard/source-file`，绑定字段 `source_json_path`），选择文件后自动绑定。后续每次自动保存都会把合并后的故事板原子写回该文件；内容没变则不写，写失败在状态栏提示、不阻塞内部保存。界面不再提供单独绑定或解绑入口。
+9. 网页删除操作会永久删除工具管理的视频副本，但不会删除ComfyUI输出目录中的原始文件。删除后还会**逐级清理变空的父目录**：把一个镜头的所有结果都删掉时，`06_生成视频\<项目>\<分镜>` 整个目录都会消失——界面上"只删了一条"不等于磁盘上只少一个文件。
+9.1 误删可以从 ComfyUI 历史找回（已完成任务长期保留）：结果区「从 ComfyUI 恢复」按钮走 `POST /api/results/restore`，`files` 留空即自动补回"远端还有、本机已没有"的产物；想先看清楚有什么，用 `GET /api/results/recoverable/{shot_id}`。是否"已有"以**文件真在磁盘上**为准——记录还在但文件已丢了（删除事故的典型残骸）会被就地修好，不会再挂一份重复卡片。
+9.2 二采档位由**用户点的那条视频**决定，不是由链尾状态决定。一采的 latent 名是 `output_name`，第 N 采是 `output_name_pN`；每条 result 都记着 `pass_number` 与 `latent_name`。所以点一采的视频出的就是二采、点二采的视频出的才是三采（`POST /api/refine` 的 `source_result_id`）。链尾产物被删除时 `refine_job` 会同步作废，否则下一次二采会被当成三采继续加档。二采默认整张直出（`split_tiling=false`），档位上限 9。
 10. 除非用户明确要求生成，否则不得调用`/api/submit`或把任务加入ComfyUI队列。
 11. `continue_from_previous=true`只允许用于非首行片段。它隐式读取紧邻上一镜`output_name`对应的AV latent；勾选延续时，界面必须自动强制打开上一镜的`save_latent`。
 12. R2VA和FL2VA共享H3 AV latent格式。R2VA续镜保留R2VA conditioning并使用`H3ContinuousContinueV14`产生的Masked AV目标latent；FL2VA续镜同时使用该节点的conditioning和latent。

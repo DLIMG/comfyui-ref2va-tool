@@ -20,6 +20,11 @@ def build_picker_script(kind: str) -> str:
         filter_text = "文本|*.txt|所有文件|*.*"
         title = "选择H3提示词"
         result = "$dialog.FileName"
+    elif kind == "json":
+        multiple = "$false"
+        filter_text = "故事板 JSON|*.json|所有文件|*.*"
+        title = "选择故事板 JSON"
+        result = "$dialog.FileName"
     else:
         raise ValueError("未知文件选择类型")
     return f"""

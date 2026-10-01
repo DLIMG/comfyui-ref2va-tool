@@ -98,7 +98,11 @@ VideoAnalyzer 的 Ref2VA 分析完成后，可点“导入视频分析草稿”�
 
 旧的 `4x-UltraSharp` 像素超分已移除。二采依赖 `Comfyui_Minimax_h3_latent_Upscaler` 节点和 `models/latent_upscale_models/minimax_h3_latent_upscaler_3d_fp16.safetensors`，安装后需重启 ComfyUI。
 
+每次一采和精修还会保存带 `__run_<唯一编号>` 的独立 AV latent，并将名称关联到对应视频；续镜继续使用固定名称的最新 latent。点击历史视频精修时使用该视频的独立 latent。旧视频没有独立 latent 时，只有 ComfyUI 历史能确认它是固定 latent 的最新写入任务，且没有覆盖该 latent 的排队任务，才允许精修；已被覆盖或无法确认归属时需重新一采。删除旧视频不会清除仍在排队、运行或回传中的精修任务。
+
 ## 使用注意
+
+- 点击“打开 JSON”选择故事板后，修改会自动保存到该文件；可再次点击打开其他 JSON。界面无需单独绑定或解绑。
 
 - 开启续镜后，上一行的 `output_name` 决定所加载的 Latent；生成上一镜后不要随意改名或调整顺序。
 - Latent 续镜必须始终使用同一台 ComfyUI，工具会拒绝跨设备接续。

@@ -159,6 +159,10 @@ class ComfyClient:
     def history(self, prompt_id: str):
         return self._request("GET", f"/history/{prompt_id}")
 
+    def histories(self):
+        """ComfyUI 会永久保留已完成任务的历史，可据此把本机丢失的结果重新拉回。"""
+        return self._request("GET", "/history")
+
     def submit(self, workflow: dict[str, Any], client_id: str):
         self._ensure_progress_listener(client_id)
         return self._request("POST", "/prompt", {"prompt": workflow, "client_id": client_id})

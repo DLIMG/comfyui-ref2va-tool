@@ -65,7 +65,12 @@ LOOP_LIST_ITEM_SLOT = 3
 MASKED_CONTEXT_FRAMES = 39
 BASE_MODEL_STEPS = 15
 H3_LATENT_UPSCALER_MODEL = "minimax_h3_latent_upscaler_3d_fp16.safetensors"
-REFINE_SIGMAS = "0.9035, 0.8000, 0.6316, 0.3158, 0.0000"
+# 二采 sigma 表。取值与导演台 ComfyUI_MiniMaxH3_Director 的内置默认表对齐：
+# director/refine_pack.py 的 HAILUO_REFINE_SIGMAS = (0.85, 0.7250, 0.4219, 0.0)，
+# 源码注释写明「海螺参考生视频二采：ManualSigmas 4 个数 = euler 3 步」。
+# 起点 0.85（而不是 1.0）说明这是低噪声重采样：在已有一采 latent 上细化，
+# 不是从零重画。想加大二采改动幅度应该抬起点，而不是加步数。
+REFINE_SIGMAS = "0.8500, 0.7250, 0.4219, 0.0000"
 ADAPTIVE_LOW_VRAM_NODE = "MiniMaxH3AdaptiveLowVRAM"
 ADAPTIVE_LOW_VRAM_ID = "160"
 REFERENCE_IMAGE_SIZES = ("match", "max")

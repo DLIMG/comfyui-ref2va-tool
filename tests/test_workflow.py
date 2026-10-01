@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.workflow import (
+    REFINE_SIGMAS,
     build_batch_loop_workflow,
     build_concatenate_workflow,
     build_refine_workflow,
@@ -18,10 +19,27 @@ from app.workflow import (
 TEMPLATE = Path(__file__).resolve().parents[1] / "app" / "templates" / "minimax_h3_turbo_8step_ref2va_api.json"
 
 
+def test_build_refine_workflow_defaults_to_direct_output_with_three_step_sigmas():
+    """二采默认整张直出（不分块），sigma 表与导演台一致 = 3 步。"""
+    result = build_refine_workflow(
+        load_template(TEMPLATE), ["one.png"], "prompt", 6, 7,
+        "codex_ref2va_tool/shot_p2", "shot", target_resolution="0.9mp",
+    )
+    assert result["304"]["class_type"] == "ManualSigmas"
+    assert result["304"]["inputs"]["sigmas"] == REFINE_SIGMAS
+    assert len(REFINE_SIGMAS.split(",")) == 4, "4 个 sigma 值 = 3 步（对齐导演台）"
+    assert result["307"]["class_type"] == "MMH3SplitUpscale"
+    assert result["307"]["inputs"]["latent"] == ["303", 0]
+    assert "temporal_split_param" not in result["307"]["inputs"]
+    assert "305" not in result
+    assert "306" not in result
+
+
 def test_build_refine_workflow_uses_h3_av_latent_upscale_and_low_noise_sample():
     result = build_refine_workflow(
         load_template(TEMPLATE), ["one.png"], "prompt", 6, 7,
         "codex_ref2va_tool/shot_p2", "shot", target_resolution="0.9mp",
+        split_tiling=True,
     )
     assert result["300"]["class_type"] == "H3ContinuousLoadLatent"
     assert result["301"]["class_type"] == "LTXVSeparateAVLatent"
